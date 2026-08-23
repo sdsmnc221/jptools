@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+	<title>{{GAME_NAME}}</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+	
+	<!-- Made with Construct, the game and app creator :: https://www.construct.net -->
+	<meta name="generator" content="Scirra Construct">
+
+
+
+
+	<link rel="icon" type="image/png" href="icons/icon-512.png">
+
+	<link rel="stylesheet" href="style.css">
+
+
+</head> 
+ 
+<body>
+
+	
+
+	
+	<noscript>
+		<div id="notSupportedWrap">
+			<h2 id="notSupportedTitle">This content requires JavaScript</h2>
+			<p class="notSupportedMessage">JavaScript appears to be disabled. Please enable it to view this content.</p>
+		</div>
+	</noscript>
+	<script src="scripts/supportcheck.js"></script>
+  <script src="shim.js"></script>
+<!-- nwjs-joiplay-patch-shim: replaces the Construct boot script.
+     The game's scripts/main.js is fetched, its exportType flipped from nwjs to
+     html5 in memory, and the result imported as a blob module. The file on disk
+     is never touched. -->
+{{CONTROLLER_SCRIPT}}<script type="module">
+  console.log("joiplay-shim debug");
+  const res = await fetch("{{MAIN_PATH}}");
+  if (!res.ok) throw new Error("joiplay-shim: could not fetch {{MAIN_PATH}} (" + res.status + ")");
+  const src = await res.text();
+  const patched = src.replace('exportType:"nwjs"', 'exportType:"html5"');
+  if (patched === src) throw new Error("joiplay-shim: exportType:\"nwjs\" not found in {{MAIN_PATH}}");
+  await import(URL.createObjectURL(new Blob([patched], { type: "text/javascript" })));
+</script>
+
+</body> 
+</html>

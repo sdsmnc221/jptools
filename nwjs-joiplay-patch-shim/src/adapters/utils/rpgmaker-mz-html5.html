@@ -1,0 +1,16 @@
+<!-- nwjs-joiplay-patch-shim: replaces the MZ boot script. -->
+{{CONTROLLER_SCRIPT}}
+<!-- SHIM SCRIPT -->
+<script>
+let _p;
+  Object.defineProperty(window, "$plugins", {
+    configurable: true,
+    get: () => _p,
+    set: (v) => {
+      _p = v;
+      for (const p of v) if (p.name === "WTE_BootDiagnostic") p.status = false;
+    },
+  });
+</script>
+
+{{MAIN_SCRIPT}}
