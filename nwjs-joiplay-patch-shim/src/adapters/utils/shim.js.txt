@@ -1,0 +1,19 @@
+const patchProcess = () => {
+    if (typeof process !== "object" || !process) return;   // not there yet — a later pass will get it
+    ["on","once","off","addListener","removeListener","removeAllListeners","emit"]
+      .forEach((m) => { if (typeof process[m] !== "function") process[m] = () => {}; });
+  };
+
+const runner = (engine) => {
+  if (engine === "rpgmmz") {
+    patchProcess();
+    document.addEventListener("DOMContentLoaded", patchProcess); 
+    window.addEventListener("load", patchProcess);
+  }
+
+  if (engine === "construct") {
+    // nothing to shim
+  }
+};
+
+runner("{{ENGINE}}");

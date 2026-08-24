@@ -1,0 +1,23 @@
+{
+  "name": "jpt-commons",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    "./errors": "./src/errors.js",
+    "./game-tree": "./src/game-tree.js",
+    "./rga": "./src/rga.js",
+    "./verify-entry": "./src/verify-entry.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "sdsmnc221",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.2",
+  "dependencies": {
+    "adm-zip": "^0.6.0"
+  }
+}
