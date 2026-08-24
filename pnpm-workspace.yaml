@@ -1,0 +1,4 @@
+packages:
+  - "jpt-commons"
+  - "nwjs-joiplay-patch-shim"
+  - "joiplay-rg-input"

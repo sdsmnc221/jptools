@@ -1,5 +1,5 @@
-import { GameTree } from "./game-tree.js";
-import { AmbigousError, UnsupportedError, ShimError } from "./errors.js";
+import { GameTree } from "jpt-commons/game-tree";
+import { AmbigousError, UnsupportedError, ShimError } from "jpt-commons/errors";
 
 import { detectContruct3 } from "./adapters/contruct.js";
 import { detectRgpMakerMz } from "./adapters/mz.js";

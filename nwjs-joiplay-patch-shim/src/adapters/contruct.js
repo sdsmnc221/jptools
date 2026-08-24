@@ -1,4 +1,5 @@
-import { ShimError } from "../errors.js";
+import { ShimError } from "jpt-commons/errors";
+import { getDefaultPatchDir, createShimFile, packGame } from "jpt-commons/rga";
 import {
   readTemplate,
   fill,
@@ -145,7 +146,7 @@ export async function packConstruct3(
 
   const isDryRun = options.dryRun || false;
 
-  const patchDir = path.join(tree.root, "..", tree.gameName + "_patch");
+  const patchDir = getDefaultPatchDir(tree.root, tree.gameName);
   if (!isDryRun) mkdirSync(patchDir, { recursive: true });
 
   // this is the game.cfg
@@ -195,9 +196,9 @@ export async function packConstruct3(
     reportVerification(verification);
   } else {
     assertPatchesMatch(verification);
-    gameCfg = await tree.createShimFile("game.cfg", gameCfgContent, patchDir);
-    shimJs = await tree.createShimFile("shim.js", shimJsContent, patchDir);
-    patchesJson = await tree.createShimFile(
+    gameCfg = await createShimFile("game.cfg", gameCfgContent, patchDir);
+    shimJs = await createShimFile("shim.js", shimJsContent, patchDir);
+    patchesJson = await createShimFile(
       "patches.json",
       serializePatches(patchesJsonContent),
       patchDir,
@@ -208,14 +209,18 @@ export async function packConstruct3(
       files: [gameCfg, shimJs, patchesJson],
     };
 
-    packPatch = await tree.packGame(gameContent, {
-      ext: ".rga",
-    });
+    packPatch = await packGame(
+      gameContent.where,
+      tree.gameName,
+      gameContent.files,
+      options,
+    );
   }
 
   return {
     packPatch: isDryRun ? null : packPatch,
     files: [gameCfg, shimJs, isDryRun ? null : patchesJson].filter(Boolean),
+    patchesJsonContent,
   };
 }
 

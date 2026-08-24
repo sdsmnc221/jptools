@@ -27,13 +27,13 @@ On desktop the game runs under NW.js = Chromium + Nodejs, where `process` is a r
 
 ## Get it to work
 
-_Tested on MacOS, stay cautious and well aware of `unzip` and `zip` native commands may not be universal._
-
 ### Install the CLI
 
 ```bash
+pnpm install
 pnpm shim-on
-# or yarn, npm, npx, whatever you were using. This is under node.js with no additional package
+# or yarn, npm, npx, whatever you were using.
+# This is under node.js with additional package adm-zip
 ```
 
 ### Detect (you can skip)
@@ -46,6 +46,24 @@ joiplay-shim detect [game-dir]
 
 ```bash
 joiplay-shim install [game-dir] [options: --dry-run]
+```
+
+### Verify
+
+> Are the shim files present and consistent
+
+```bash
+joiplay-shim verify [game-dir]
+```
+
+### Remove produced game patch
+
+> Delete only files this tool created
+>
+> This don't remove the patch you applied to your game, this just cleans up the patch it produces (if it ever does that through `install`)
+
+```bash
+joiplay-shim remove [game-dir]
 ```
 
 ### Patch

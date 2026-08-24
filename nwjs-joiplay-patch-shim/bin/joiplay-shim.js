@@ -7,18 +7,12 @@
 
 import { detectGameEngine } from "../src/detect.js";
 import { installShimToGame } from "../src/install.js";
-import { ShimError } from "../src/errors.js";
-import { GameTree } from "../src/game-tree.js";
+import { verifyShim } from "../src/verify.js";
+import { removeShim } from "../src/remove.js";
+import { ShimError } from "jpt-commons/errors";
+import { GameTree } from "jpt-commons/game-tree";
 
 const args = process.argv.slice(2);
-
-const verifyShim = async (gameDir) => {
-  return "stubbed";
-};
-
-const removeShim = async (gameDir) => {
-  return "stubbed";
-};
 
 const main = async () => {
   if (args.length < 2) {
@@ -31,41 +25,30 @@ const main = async () => {
   const isDryRun = options.includes("--dry-run");
 
   let result;
-  const detectionResult = await detectGameEngine(gameDir);
 
   switch (command) {
     case "detect":
-      console.log("Detection complete.");
+      const detectionResult = await detectGameEngine(gameDir);
       console.log(detectionResult.engine, "ready to shim");
       return 0;
     case "install":
-      result = await installShimToGame(detectionResult, { dryRun: isDryRun });
+      result = await installShimToGame(gameDir, { dryRun: isDryRun });
       break;
     case "verify":
       result = await verifyShim(gameDir);
       break;
     case "remove":
-      result = await removeShim(gameDir);
+      result = await removeShim(gameDir, { dryRun: isDryRun });
       break;
     default:
       console.error(`Unknown command: ${command}`);
       return 1;
   }
 
-  console.log(`Command ${command} completed successfully.`);
-
   if (result === "ok") {
-    console.log("Shim installation complete.");
+    console.log(`Command ${command} complete.`);
   }
 
-  if (detectionResult.treeIfExe) {
-    console.log(
-      `Game was an exe, built with NW.js ${detectionResult.engine}. \nHence, to not modify the game contents, shim was installed to unpacked directory:\n${detectionResult.tree.root}`,
-    );
-    console.log(
-      `If you want to run the game with the shim, you need to run it from the unpacked directory. \nPointing JoiPlay to index-patch.html in the unpacked directory should work.`,
-    );
-  }
   return 0;
 };
 

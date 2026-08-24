@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
-import { ShimError } from "./errors.js";
+import { ShimError } from "jpt-commons/errors";
 
 /**
  * A patches.json `key` is a blind string match. If it is absent from the game,

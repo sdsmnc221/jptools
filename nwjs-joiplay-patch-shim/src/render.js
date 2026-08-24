@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { ShimError } from "./errors.js";
+import { ShimError } from "jpt-commons/errors";
 
 export async function readTemplate(relativePath) {
   const url = new URL(relativePath, import.meta.url);

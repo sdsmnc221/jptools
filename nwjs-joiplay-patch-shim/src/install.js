@@ -1,5 +1,5 @@
-import { GameTree } from "./game-tree.js";
-import { AmbigousError, UnsupportedError, ShimError } from "./errors.js";
+import { GameTree } from "jpt-commons/game-tree";
+import { AmbigousError, UnsupportedError, ShimError } from "jpt-commons/errors";
 import { detectGameEngine } from "./detect.js";
 import { shimContruct3 } from "./adapters/contruct.js";
 import { shimRpgMakerMz } from "./adapters/mz.js";
@@ -9,8 +9,10 @@ const SHIMMERS = {
   rpgmmz: shimRpgMakerMz,
 };
 
-export async function installShimToGame(detectionResult, options = {}) {
+export async function installShimToGame(gameDir, options = {}) {
   const results = [];
+
+  const detectionResult = await detectGameEngine(gameDir);
 
   console.log(`Installing shim for ${detectionResult.engine}...`);
 

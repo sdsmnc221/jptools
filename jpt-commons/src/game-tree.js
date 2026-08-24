@@ -1,13 +1,15 @@
 import { readdir, readFile, stat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { GameTreeError } from "./errors.js";
+import { GameTreeError } from "jpt-commons/errors";
 import { rmSync } from "node:fs";
+import AdmZip from "adm-zip";
 
 export class GameTree {
   constructor(root) {
     this.root = path.resolve(root);
     this.gameName = path.basename(this.root);
+    this.admZip = AdmZip;
   }
 
   resolve(relativePath) {
@@ -53,21 +55,6 @@ export class GameTree {
 
     await walk(this.root);
     return out.sort();
-  }
-
-  async createShimFile(shimFileName, content, dir = this.root) {
-    console.log(`Creating shim file ${shimFileName} in ${dir}`);
-    const filePath = path.join(dir, shimFileName);
-
-    try {
-      await writeFile(filePath, content, "utf-8");
-    } catch (error) {
-      throw new GameTreeError(
-        `Failed to write shim file ${filePath}: ${error.message}`,
-      );
-    }
-
-    return filePath;
   }
 
   // FIXED: Ask where is the game content, rather than ask where is the exe
@@ -146,6 +133,9 @@ export class GameTree {
     }
   }
 
+  // sbug exists
+  // and would surface the moment Impact support is un-stubbed, but it's currently dead code for
+  // everything the tool actually ships
   async unpackGame(options) {
     if (options.unpackedNeeded === false) {
       console.log("Game is already unpacked, no need to unpack.");
@@ -173,14 +163,17 @@ export class GameTree {
           );
           await mkdir(unpackedGameDir, { recursive: true });
 
-          // TODO: is unzip available on all platforms? Should we use a library instead?
-          execFileSync(
-            "unzip",
-            ["-o", path.join(this.root, "package.nw"), "-d", unpackedGameDir],
-            {
-              stdio: "inherit",
-            },
-          );
+          // DEPRECATED, unzip not available on all platforms
+          // Using adm-zip instead
+          // execFileSync(
+          //   "unzip",
+          //   ["-o", path.join(this.root, "package.nw"), "-d", unpackedGameDir],
+          //   {
+          //     stdio: "inherit",
+          //   },
+          // );
+          const zip = new this.admZip(packageNwPath);
+          zip.extractAllTo(unpackedGameDir, true);
 
           return unpackedGameDir;
         } else {
@@ -190,27 +183,5 @@ export class GameTree {
         throw new GameTreeError(`Failed to unpack game: ${error.message}`);
       }
     }
-  }
-
-  async packGame(gameContent, options = { ext: ".rga" }) {
-    // if game content already packed, overwrite it
-    const outputFilePath = path.join(gameContent.where, "patch" + options.ext);
-
-    console.log(`Game content already packed, overwriting ${outputFilePath}`);
-    rmSync(outputFilePath, { force: true });
-
-    const result = execFileSync("zip", [
-      "-X", // exclude extra file attributes
-      "-j", // flatten paths
-      path.join(gameContent.where, "patch" + options.ext), // output file
-      ...gameContent.files,
-    ]);
-
-    // clean up the temporary files
-    for (const file of gameContent.files) {
-      rmSync(file, { force: true });
-    }
-
-    return result;
   }
 }
