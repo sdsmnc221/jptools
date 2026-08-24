@@ -40,6 +40,10 @@ export const MONSTEREST_WASD_PROFILE = {
   SELECT: "I",
 };
 
+export const ELDERFIELD = {
+  X: 59, // Android KEYCODE_SHIFT_LEFT -> WebView translates to DOM Shift(16) -> RPG Maker "shift"/dash
+};
+
 export const GLOBAL_DEFAULT = {
   DPAD_UP: 19,
   DPAD_DOWN: 20,

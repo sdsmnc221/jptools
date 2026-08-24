@@ -9,12 +9,14 @@ import { buildGamepad } from "../src/gamepad.js";
 import {
   GLOBAL_DEFAULT,
   MONSTEREST_WASD_PROFILE,
+  ELDERFIELD,
   mergeProfile,
 } from "../src/profiles.js";
 
 const PROFILES = {
   "rg-rotate": GLOBAL_DEFAULT,
-  "monstereest-wasd": MONSTEREST_WASD_PROFILE,
+  monsterest: MONSTEREST_WASD_PROFILE,
+  elderfield: ELDERFIELD,
 };
 
 const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
@@ -45,7 +47,9 @@ const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
         : []),
     ];
 
-    await packGame(tree.root, tree.gameName, files);
+    await packGame(tree.root, tree.gameName, files, {
+      defaultPatchFilename: "patch_input.rga",
+    });
   } else {
     console.log(
       `Dry run: would create keymap.json in ${stagingDir} for device profile ${profile}`,
@@ -84,12 +88,17 @@ const main = async () => {
   const [command, gameDir, ...options] = args;
 
   const isDryRun = options.includes("--dry-run");
+  const profileIndex = options.indexOf("--profile");
+  const profile =
+    profileIndex !== -1 && options[profileIndex + 1]
+      ? options[profileIndex + 1]
+      : "rg-rotate";
 
   let result;
 
   switch (command) {
     case "install":
-      result = await install(gameDir, { dryRun: isDryRun });
+      result = await install(gameDir, { dryRun: isDryRun, profile });
       break;
     case "verify":
       result = await verify(gameDir);
