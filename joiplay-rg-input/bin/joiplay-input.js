@@ -5,9 +5,11 @@
 // joiplay-input verify  <game-dir>              are the shim files present and consistent, render the resulting keymap.json
 // joiplay-input remove  <game-dir>              delete only files this tool created
 
+import { mkdirSync, existsSync } from "fs";
+import path from "path";
 import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
-import { ShimError } from "jpt-commons/errors";
-import { mkdirSync } from "fs";
+import { ShimError, AmbigousError } from "jpt-commons/errors";
+import { verifyInstalledEntry } from "jpt-commons/verify-entry";
 import { GameTree } from "jpt-commons/game-tree";
 import { buildKeymap } from "../src/keymap.js";
 import { buildGamepad } from "../src/gamepad.js";
@@ -87,6 +89,24 @@ const verify = async (gameDir, { profile = "rg-rotate" }) => {
   console.log(
     `Would also create gamepad.json in ${stagingDir}. Actually sorry gamepad isn't implemented yet.`,
   );
+
+  // Compare like-for-like:
+  const installedRgaPath = path.join(stagingDir, "patch_input.rga");
+
+  if (!existsSync(installedRgaPath)) {
+    console.log("Not installed — run `install` first.");
+    throw new AmbigousError(
+      `Verified finished. Not installed — run \`install\` first.`,
+    );
+  }
+
+  const verificationsResults = verifyInstalledEntry(
+    stagingDir,
+    "keymap.json",
+    expectedKeymap,
+  );
+
+  console.log("keymap.json is:", verificationsResults);
 
   return "ok";
 };
