@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
+// joiplay-rg-input list                       show built-in profiles
+// joiplay-input install <game-dir> [--profile rg-rotate] [--dry-run]
+// joiplay-input verify  <game-dir>              are the shim files present and consistent, render the resulting keymap.json
+// joiplay-input remove  <game-dir>              delete only files this tool created
+
 import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
 import { ShimError } from "jpt-commons/errors";
 import { mkdirSync } from "fs";
@@ -7,9 +12,10 @@ import { GameTree } from "jpt-commons/game-tree";
 import { buildKeymap } from "../src/keymap.js";
 import { buildGamepad } from "../src/gamepad.js";
 import {
-  GLOBAL_DEFAULT,
-  MONSTEREST_WASD_PROFILE,
   ELDERFIELD,
+  GLOBAL_DEFAULT,
+  MOONSTONE,
+  MONSTEREST_WASD_PROFILE,
   mergeProfile,
 } from "../src/profiles.js";
 
@@ -17,6 +23,7 @@ const PROFILES = {
   "rg-rotate": GLOBAL_DEFAULT,
   monsterest: MONSTEREST_WASD_PROFILE,
   elderfield: ELDERFIELD,
+  moonstone: MOONSTONE,
 };
 
 const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
@@ -57,7 +64,7 @@ const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
     console.log(keymap);
     console.log(`----------`);
     console.log(
-      `Dry run: would create gamepad.json in ${stagingDir}. Actually sorry gamepad isnt implemented yet.`,
+      `Dry run: would create gamepad.json in ${stagingDir}. Actually sorry gamepad isn't implemented yet.`,
     );
     console.log(gamepad);
   }
@@ -65,27 +72,38 @@ const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
   return "ok";
 };
 
-const verify = async (gameDir) => {
-  return "stubbed";
+const verify = async (gameDir, { profile = "rg-rotate" }) => {
+  const tree = new GameTree(gameDir);
+  const stagingDir = getDefaultPatchDir(tree.root, tree.gameName);
+
+  const resolvedProfile = mergeProfile(PROFILES[profile] || {});
+  const expectedKeymap = buildKeymap(resolvedProfile);
+
+  console.log(
+    `Verify: would create keymap.json in ${stagingDir} for device profile ${profile}`,
+  );
+  console.log(expectedKeymap);
+  console.log(`----------`);
+  console.log(
+    `Would also create gamepad.json in ${stagingDir}. Actually sorry gamepad isn't implemented yet.`,
+  );
+
+  return "ok";
 };
 
 const remove = async (gameDir, { dryRun } = {}) => {
   return "stubbed";
 };
 
-// joiplay-input install <game-dir> [--profile rg-rotate] [--dry-run]
-// joiplay-input verify  <game-dir>              are the shim files present and consistent
-// joiplay-input remove  <game-dir>              delete only files this tool created
-
 const args = process.argv.slice(2);
 
 const main = async () => {
-  if (args.length < 2) {
+  const [command, gameDir, ...options] = args;
+
+  if (command !== "list" && args.length < 2) {
     console.error("Usage: joiplay-input <command> <game-dir> [options]");
     process.exit(1);
   }
-
-  const [command, gameDir, ...options] = args;
 
   const isDryRun = options.includes("--dry-run");
   const profileIndex = options.indexOf("--profile");
@@ -97,11 +115,25 @@ const main = async () => {
   let result;
 
   switch (command) {
+    case "list":
+      console.log("Available profiles:");
+      Object.keys(PROFILES).forEach((key) => {
+        console.log(`- ${key}`, `${key === "rg-rotate" ? "(default)" : ""}`);
+      });
+
+      console.log(
+        `Use --profile <profile-name> to select a profile when installing.`,
+      );
+
+      console.log(
+        `Use verify --profile <profile-name> to check the keymap.json that would be generated for that profile`,
+      );
+      return 0;
     case "install":
       result = await install(gameDir, { dryRun: isDryRun, profile });
       break;
     case "verify":
-      result = await verify(gameDir);
+      result = await verify(gameDir, { profile });
       break;
     case "remove":
       result = await remove(gameDir, { dryRun: isDryRun });
