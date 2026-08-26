@@ -29,10 +29,18 @@ export function getDefaultPatchDir(gameDir, gameName) {
   return path.join(gameDir, "..", gameName + DEFAULT_PATCH_DIRNAME);
 }
 
-export async function packGame(gameDir, gameName, files, options = {}) {
+export async function packGame(
+  gameDir,
+  gameName,
+  files,
+  options = { defaultPatchFilename: DEFAULT_PATCH_FILENAME },
+) {
   const outputPatchDir = getDefaultPatchDir(gameDir, gameName);
   // if game content already packed, overwrite it
-  const outputFilePath = path.join(outputPatchDir, DEFAULT_PATCH_FILENAME);
+  const outputFilePath = path.join(
+    outputPatchDir,
+    options.defaultPatchFilename,
+  );
 
   console.log(`Game content already packed, overwriting ${outputFilePath}`);
   rmSync(outputFilePath, { force: true });
