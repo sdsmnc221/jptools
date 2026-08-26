@@ -55,9 +55,47 @@ def find_embedded_pack(exe_path: Path) -> Path | None:
             size_bytes = f.read(4)
             size = struct.unpack("<I", size_bytes)[0]
             start = f.seek(-12-size, 2)
-            return f"start: {start}, size: {size}"
+            return {"start": start, "size": size}
     except Exception as e:
         return None
+
+def extract(exe_path: str | Path, output_path: str | Path | None = None, force: bool = False) -> Path:
+    exe_path = Path(exe_path)
+    pack = find_embedded_pack(exe_path)
+
+    if pack is None:
+        raise ValueError("no embedded Godot pack found")
+
+    output_path = Path(output_path) if output_path else exe_path.with_suffix(".pck")
+
+    if output_path.exists() and not force:
+        raise FileExistsError(f"output already exists: {output_path}")
+
+    temp_path = output_path.with_suffix(output_path.suffix + ".tmp")
+
+    start = pack["start"]
+    remaining = pack["size"]
+    chunk_size = 1024 * 1024 # 1MB at a time
+
+    try:
+        with exe_path.open("rb") as src, temp_path.open("wb") as dst:
+            src.seek(start)
+
+            while remaining > 0:
+                data = src.read(min(chunk_size, remaining))
+                if not data:
+                    raise IOError("You're early. I've missed ya.")
+
+                dst.write(data)
+                remaining -= len(data)
+
+        temp_path.replace(output_path)
+        return output_path
+
+    except Exception:
+        if temp_path.exists():
+            temp_path.unlink()
+        raise
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -78,6 +116,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="read the embedded Godot pack header from an executable",
     )
     detect.add_argument("exe", type=Path)
+
+    extract = subparsers.add_parser(
+        "extract",
+        help="extract the embedded Godot pack from an executable",
+    )
+    extract.add_argument("exe", type=Path)
+    extract.add_argument("output", type=Path, nargs="?", default=None)
+    extract.add_argument("--force", action="store_true")
 
     return parser
 
@@ -113,9 +159,27 @@ def main(argv: list[str] | None = None) -> int:
             if embedded_pack_info is None:
                 print("No embedded Godot pack found.")
             else:
-                print(f"Embedded Godot pack info: {embedded_pack_info}")
+                print(f"Embedded Godot pack info: start pck: {embedded_pack_info.start}, size pck: {embedded_pack_info.size}")
 
             return 0
+
+        if args.command == "extract":
+            if not args.exe.is_file():
+                print("Invalid path to the executable.")
+                return 1
+            if not args.exe.suffix == ".exe":
+                print("The specified file is not a .exe file.")
+                return 1
+            try:
+                output_path = extract(args.exe, args.output, args.force)
+                print(f"Extracted Godot pack to: {output_path}")
+                return 0
+            except FileExistsError as e:
+                print(e)
+                return 1
+            except ValueError as e:
+                print(e)
+                return 1
 
         parser.error(f"unknown command: {args.command}")
         return 2
