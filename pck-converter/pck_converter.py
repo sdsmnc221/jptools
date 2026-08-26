@@ -36,6 +36,29 @@ def read_pack_header(path: Path) -> dict | None:
     format, major, minor, patch = rawbytes_to_numbers
     return f"{major}.{minor}.{patch}, format {format}"
 
+def find_embedded_pack(exe_path: Path) -> Path | None:
+    try:
+        # Get the file size
+        file_size = exe_path.stat().st_size
+        # if the file size is less than 4 bytes, it cannot contain the "GDPC" signature
+        if file_size < 4:
+            return None
+        # Read the last 4 bytes of the file
+        with open(exe_path, "rb") as f:
+            f.seek(-4, 2)
+            last_four_bytes = f.read(4)
+            if last_four_bytes != b"GDPC":
+                return None
+            # Jump to EOF-12
+            f.seek(-12, 2)
+            # jump to EOF-12-size
+            size_bytes = f.read(4)
+            size = struct.unpack("<I", size_bytes)[0]
+            start = f.seek(-12-size, 2)
+            return f"start: {start}, size: {size}"
+    except Exception as e:
+        return None
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pck-converter",
@@ -85,8 +108,13 @@ def main(argv: list[str] | None = None) -> int:
             if header is None:
                 print("No embedded Godot pack header found.")
                 return 1
-
             print(f"Godot pack detected: {header}")
+            embedded_pack_info = find_embedded_pack(args.exe)
+            if embedded_pack_info is None:
+                print("No embedded Godot pack found.")
+            else:
+                print(f"Embedded Godot pack info: {embedded_pack_info}")
+
             return 0
 
         parser.error(f"unknown command: {args.command}")
