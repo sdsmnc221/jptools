@@ -147,6 +147,31 @@ export const MOONSTONE = {
   SELECT: "I",
 };
 
+// Pokémon Insurgence 1.2.7 (RPG Maker XP / Pokémon Essentials).
+//
+// Face buttons cover the core Action, Cancel/Menu, Run, and Autorun actions.
+// Q/W retain Insurgence's menu scrolling as well as registered slots 1/2;
+// E/T provide registered slots 3/4. Start intentionally duplicates Menu rather
+// than exposing Quicksave/Speedup on an easy-to-hit physical control. DexNav is
+// useful enough to deserve Select; registered slot 5 (Y) remains available via
+// JoiPlay's keyboard overlay.
+export const POKEMON_INSURGENCE = {
+  DPAD_UP: "ARROW_UP",
+  DPAD_DOWN: "ARROW_DOWN",
+  DPAD_LEFT: "ARROW_LEFT",
+  DPAD_RIGHT: "ARROW_RIGHT",
+  A: "ENTER",
+  B: "ESCAPE",
+  X: "Z",
+  Y: "S",
+  L1: "Q",
+  R1: "W",
+  L2: "E",
+  R2: "T",
+  START: "ESCAPE",
+  SELECT: "D",
+};
+
 export const GLOBAL_DEFAULT = {
   DPAD_UP: 19,
   DPAD_DOWN: 20,

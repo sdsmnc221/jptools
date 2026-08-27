@@ -18,6 +18,7 @@ import {
   GLOBAL_DEFAULT,
   MOONSTONE,
   MONSTEREST_WASD_PROFILE,
+  POKEMON_INSURGENCE,
   mergeProfile,
 } from "../src/profiles.js";
 
@@ -26,6 +27,7 @@ const PROFILES = {
   monsterest: MONSTEREST_WASD_PROFILE,
   elderfield: ELDERFIELD,
   moonstone: MOONSTONE,
+  "pokemon-insurgence": POKEMON_INSURGENCE,
 };
 
 const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
