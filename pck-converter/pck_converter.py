@@ -1,8 +1,18 @@
+import hashlib
 import struct
 import os
 import argparse
 from pathlib import Path
 import sys
+
+PACK_MAGIC = b"GDPC"
+# "GDPC", format, major, minor, patch, 16 reserved u32, file_count -> 88 bytes.
+HEADER_SIZE = 88
+FILE_COUNT_OFFSET = 84
+# An embedded pack ends with [u64 size]["GDPC"].
+TRAILER_SIZE = 12
+# Directory entry tail: u64 offset, u64 size, 16-byte MD5.
+ENTRY_TAIL_SIZE = 32
 
 def find_executables(game_dir: str) -> list[str] | None:
     try:
@@ -12,52 +22,105 @@ def find_executables(game_dir: str) -> list[str] | None:
     except Exception as e:
         return None
 
-def read_pack_header(path: Path) -> dict | None:
+def find_embedded_pack(exe_path: Path) -> dict | None:
+    """Locate the pack appended to a Godot self-contained executable."""
     try:
-        with open(path, "rb") as f:
-            last_four_bytes = f.read()[-4:] 
-            # If last_four_bytes is not b"GDPC", return None
-            if last_four_bytes != b"GDPC":
-                return None
-            # If it is, exe is the embedded pack
-            # Jump to EOF-12
-            f.seek(-12, 2)
-            # jump to EOF-12-size
-            size_bytes = f.read(4)
-            size = struct.unpack("<I", size_bytes)[0]
-            f.seek(-12-size, 2)
-            header = f.read(size)
-
-            rawbytes_to_numbers = struct.unpack_from("<IIII", header, 4)
-            
-    except Exception as e:
-        return None
-    # {major}.{minor}.{patch}
-    format, major, minor, patch = rawbytes_to_numbers
-    return f"{major}.{minor}.{patch}, format {format}"
-
-def find_embedded_pack(exe_path: Path) -> Path | None:
-    try:
-        # Get the file size
         file_size = exe_path.stat().st_size
-        # if the file size is less than 4 bytes, it cannot contain the "GDPC" signature
-        if file_size < 4:
+        if file_size < TRAILER_SIZE:
             return None
-        # Read the last 4 bytes of the file
         with open(exe_path, "rb") as f:
             f.seek(-4, 2)
-            last_four_bytes = f.read(4)
-            if last_four_bytes != b"GDPC":
+            if f.read(4) != PACK_MAGIC:
                 return None
-            # Jump to EOF-12
-            f.seek(-12, 2)
-            # jump to EOF-12-size
-            size_bytes = f.read(4)
-            size = struct.unpack("<I", size_bytes)[0]
-            start = f.seek(-12-size, 2)
+            f.seek(-TRAILER_SIZE, 2)
+            # The size is a u64. Reading only 4 bytes happens to work while the
+            # pack is under 4 GiB and the high word is zero, so the truncation
+            # stays invisible until it silently isn't.
+            size = struct.unpack("<Q", f.read(8))[0]
+            start = file_size - TRAILER_SIZE - size
+            if start < 0:
+                return None
+            # Godot checks the magic at the computed start as well; if it is not
+            # there the trailer lied and nothing after this point is meaningful.
+            f.seek(start)
+            if f.read(4) != PACK_MAGIC:
+                return None
             return {"start": start, "size": size}
     except Exception as e:
+        raise ValueError(f"Failed to find embedded pack: {e}")
+
+def read_pack_header(path: Path) -> dict | None:
+    """Parse the 88-byte pack header of an executable's embedded pack."""
+    pack = find_embedded_pack(path)
+    if pack is None:
         return None
+    with open(path, "rb") as f:
+        f.seek(pack["start"])
+        header = f.read(HEADER_SIZE)
+    if len(header) < HEADER_SIZE:
+        return None
+    # Read the header from the PACK's start, not the file's. At file offset 0
+    # sits the DOS/PE stub, whose fields decode into a plausible-looking
+    # version tuple - (3, 4, 65535, 184) is e_cp/e_cparhdr/e_maxalloc/e_sp.
+    _magic, format, major, minor, patch = struct.unpack_from("<IIIII", header, 0)
+    return {
+        "format": format,
+        "version": f"{major}.{minor}.{patch}",
+        "file_count": struct.unpack_from("<I", header, FILE_COUNT_OFFSET)[0],
+        **pack,
+    }
+
+def rebase_offsets(pck_path: Path, delta: int) -> int:
+    """Subtract `delta` from every file offset in an extracted pack.
+
+    An embedded pack's directory stores offsets as absolute positions in the
+    .exe, because that is where Godot reads them from. Slicing the pack out
+    moves the data to a new base of 0 but leaves the directory pointing into
+    the original executable, so every entry is too large by the pack's start
+    offset and most land past EOF. The bytes are fine; only the index is wrong.
+    """
+    with open(pck_path, "r+b") as f:
+        header = f.read(HEADER_SIZE)
+        count = struct.unpack_from("<I", header, FILE_COUNT_OFFSET)[0]
+        for _ in range(count):
+            path_length = struct.unpack("<I", f.read(4))[0]
+            # Read exactly path_length bytes: the field is PADDED, and Godot's
+            # reader advances by it verbatim. Recomputing it from the string
+            # desyncs the directory from this entry onwards.
+            f.read(path_length)
+            tail = f.tell()
+            offset, size = struct.unpack("<QQ", f.read(16))
+            f.seek(tail)
+            f.write(struct.pack("<QQ", offset - delta, size))
+            f.seek(tail + ENTRY_TAIL_SIZE)
+    return count
+
+def verify_pack(pck_path: Path) -> tuple[int, int, int]:
+    """Check every file against the MD5 the pack stores for it.
+
+    This is a complete self-check: if the offsets are wrong the hashes cannot
+    match, so it proves the rebase rather than merely suggesting it.
+    """
+    ok = bad = skipped = 0
+    with open(pck_path, "rb") as f:
+        header = f.read(HEADER_SIZE)
+        count = struct.unpack_from("<I", header, FILE_COUNT_OFFSET)[0]
+        entries = []
+        for _ in range(count):
+            path_length = struct.unpack("<I", f.read(4))[0]
+            f.read(path_length)
+            offset, size = struct.unpack("<QQ", f.read(16))
+            entries.append((offset, size, f.read(16)))
+        for offset, size, md5 in entries:
+            if md5 == b"\0" * 16:
+                skipped += 1
+                continue
+            f.seek(offset)
+            if hashlib.md5(f.read(size)).digest() == md5:
+                ok += 1
+            else:
+                bad += 1
+    return ok, bad, skipped
 
 def extract(exe_path: str | Path, output_path: str | Path | None = None, force: bool = False) -> Path:
     exe_path = Path(exe_path)
@@ -88,6 +151,18 @@ def extract(exe_path: str | Path, output_path: str | Path | None = None, force: 
 
                 dst.write(data)
                 remaining -= len(data)
+
+        # Copying the bytes is only half the job, without this the pack looks
+        # structurally valid and fails at load, because every offset still
+        # points into the .exe.
+        rebase_offsets(temp_path, start)
+        ok, bad, skipped = verify_pack(temp_path)
+        if bad:
+            raise ValueError(
+                f"{bad} of {ok + bad} files failed their MD5 after rebasing; "
+                f"refusing to write {output_path}")
+        print(f"  rebased by {start:,} bytes; MD5 verified {ok:,} files"
+              + (f" ({skipped:,} had no checksum)" if skipped else ""))
 
         temp_path.replace(output_path)
         return output_path
@@ -154,13 +229,10 @@ def main(argv: list[str] | None = None) -> int:
             if header is None:
                 print("No embedded Godot pack header found.")
                 return 1
-            print(f"Godot pack detected: {header}")
-            embedded_pack_info = find_embedded_pack(args.exe)
-            if embedded_pack_info is None:
-                print("No embedded Godot pack found.")
-            else:
-                print(f"Embedded Godot pack info: start pck: {embedded_pack_info.start}, size pck: {embedded_pack_info.size}")
-
+            print(f"Godot pack detected: {header['version']}, format {header['format']}")
+            print(f"  files : {header['file_count']:,}")
+            print(f"  start : {header['start']:,}")
+            print(f"  size  : {header['size']:,}")
             return 0
 
         if args.command == "extract":
