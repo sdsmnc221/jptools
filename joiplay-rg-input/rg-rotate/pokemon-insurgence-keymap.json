@@ -1,0 +1,72 @@
+[
+  {
+    "button": 19,
+    "keycode": 19,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 20,
+    "keycode": 20,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 21,
+    "keycode": 21,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 22,
+    "keycode": 22,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 96,
+    "keycode": 66,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 97,
+    "keycode": 111,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 99,
+    "keycode": 54,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 100,
+    "keycode": 47,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 108,
+    "keycode": 111,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 109,
+    "keycode": 32,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 102,
+    "keycode": 45,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 103,
+    "keycode": 51,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 104,
+    "keycode": 33,
+    "device": "retrogame_joypad"
+  },
+  {
+    "button": 105,
+    "keycode": 48,
+    "device": "retrogame_joypad"
+  }
+]
