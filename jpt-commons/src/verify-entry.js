@@ -10,11 +10,27 @@ function stringifyForVerify(obj) {
   return JSON.stringify(obj, null, 2);
 }
 
-export function verifyInstalledEntry(stagingDir, entryName, freshContent) {
-  const rgaPath = path.join(stagingDir, DEFAULT_PATCH_FILENAME);
+function normalizeInstalledContent(installed, freshContent) {
+  if (typeof freshContent === "string") return installed;
+
+  try {
+    return JSON.parse(installed);
+  } catch {
+    return installed;
+  }
+}
+
+export function verifyInstalledEntry(
+  stagingDir,
+  entryName,
+  freshContent,
+  patchFilename = DEFAULT_PATCH_FILENAME,
+) {
+  const rgaPath = path.join(stagingDir, patchFilename);
   if (!existsSync(rgaPath)) return "not-installed";
   const installed = new AdmZip(rgaPath).readAsText(entryName);
-  return stringifyForVerify(installed) === stringifyForVerify(freshContent)
+  const normalizedInstalled = normalizeInstalledContent(installed, freshContent);
+  return stringifyForVerify(normalizedInstalled) === stringifyForVerify(freshContent)
     ? "ok"
     : installed === ""
       ? "not-installed"

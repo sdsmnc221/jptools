@@ -7,6 +7,15 @@ node_modules/
 # leftover from the removed WebView capture command; kept locally for the
 # log.txt that proved a WebView cannot read the button table
 JoiPlayInputCapture_patch/
+capture/
 
 # captured device data, not source
 rg-input-capture.json
+
+build/
+tests/../andr
+__pycache__/
+
+*.sh
+!wifi-ddebug/capture-log.sh
+logs/
