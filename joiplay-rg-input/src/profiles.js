@@ -126,9 +126,24 @@ export const ELDERFIELD = {
   X: 59, // Android KEYCODE_SHIFT_LEFT -> WebView translates to DOM Shift(16) -> RPG Maker "shift"/dash
 };
 
-// Moonstone (Construct 3): same D-pad-to-WASD idea, but A -> SPACE, Y/Z -> I,
-// and L1/R1 -> arrow left/right for menu tabs. Same sixteen inputs, different
-// outputs, which is why separating device constants from per-game bindings.
+// Moonstone Island
+//
+//   movement  W/A/S/D       <-> gamepad D-pad 12/13/14/15
+//   confirm   Space         <-> A (0)
+//   cancel    Escape        <-> B (1)
+//   use       E             <-> X (2)
+//   inventory I             <-> Y (3)
+//   menu tabs Left/Right    <-> L1/R1 (4/5)
+//   wheel     Q             <-> L2 (6)
+//   shift     Shift         <-> R2 (7)
+//   map       M             <-> Select/Back (8)
+//
+// There is one keyboard-emulation mismatch we cannot express in keymap.json:
+// native gamepad B is context-sensitive (both cancel and SpecialAction), but
+// those are two different keyboard keys, Escape and R. Keep the conventional
+// B=cancel mapping and put R on Start so neither action is lost. The game's
+// native Start-only settings action has no keyboard binding; Escape opens or
+// closes the same menu path in normal play.
 export const MOONSTONE = {
   DPAD_UP: "W",
   DPAD_DOWN: "S",
@@ -138,13 +153,12 @@ export const MOONSTONE = {
   B: "ESCAPE",
   X: "E",
   Y: "I",
-  Z: "I",
   L1: "ARROW_LEFT",
   R1: "ARROW_RIGHT",
-  L2: "SHIFT",
-  R2: "C",
-  START: "ESCAPE",
-  SELECT: "I",
+  L2: "Q",
+  R2: "SHIFT",
+  START: "R",
+  SELECT: "M",
 };
 
 // Pokémon Insurgence 1.2.7 (RPG Maker XP / Pokémon Essentials).

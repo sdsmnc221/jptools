@@ -36,10 +36,11 @@ export async function packGame(
   options = { defaultPatchFilename: DEFAULT_PATCH_FILENAME },
 ) {
   const outputPatchDir = getDefaultPatchDir(gameDir, gameName);
+
   // if game content already packed, overwrite it
   const outputFilePath = path.join(
     outputPatchDir,
-    options.defaultPatchFilename,
+    options.defaultPatchFilename ?? DEFAULT_PATCH_FILENAME,
   );
 
   console.log(`Game content already packed, overwriting ${outputFilePath}`);

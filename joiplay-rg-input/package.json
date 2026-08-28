@@ -9,7 +9,7 @@
   "scripts": {
     "input-on": "chmod +x ./bin/joiplay-input.js && pnpm link --global",
     "check": "node --check ./bin/joiplay-input.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test"
   },
   "keywords": [],
   "author": "sdsmnc221",
