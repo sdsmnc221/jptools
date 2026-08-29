@@ -9,7 +9,7 @@
   "scripts": {
     "shim-on": "chmod +x ./bin/joiplay-shim.js && pnpm link --global",
     "check": "node --check ./bin/joiplay-shim.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test ./test/*.test.js"
   },
   "engines": {
     "node": ">=22.0.0"
