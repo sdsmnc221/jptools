@@ -169,9 +169,7 @@ export async function packPatchRpgMakerMz(
   const gameCfgContent = `title=${gameTitle}\nid=${gameId}\nexecFile=index.html\ntype=${gameType}`;
 
   // this is the shim.js
-  const shimJsContentTemplate = await readTemplate(
-    "./adapters/utils/shim.js.txt",
-  );
+  const shimJsContentTemplate = await readTemplate("./adapters/utils/shim.js");
   const shimJsContent = fill(shimJsContentTemplate, {
     ENGINE: detectionResult.engine,
   });
