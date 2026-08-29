@@ -16,8 +16,6 @@ _supports_:
 
 ## Why this shim
 
-### Games made with RPGMaker MZ.
-
 It's just time-consuming to map key of the device's controller inputs to the game's expecting controller inputs.
 
 ![First, remap](./docs/Screenshot_20260829-122317_JoiPlay.png)
