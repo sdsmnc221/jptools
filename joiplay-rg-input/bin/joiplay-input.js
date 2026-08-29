@@ -18,6 +18,7 @@ import {
   GLOBAL_DEFAULT,
   MOONSTONE,
   MONSTEREST_WASD_PROFILE,
+  POKEMON_INSURGENCE,
   mergeProfile,
 } from "../src/profiles.js";
 
@@ -26,6 +27,7 @@ const PROFILES = {
   monsterest: MONSTEREST_WASD_PROFILE,
   elderfield: ELDERFIELD,
   moonstone: MOONSTONE,
+  "pokemon-insurgence": POKEMON_INSURGENCE,
 };
 
 const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
@@ -42,7 +44,7 @@ const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
     const files = [
       await createShimFile(
         "keymap.json",
-        JSON.stringify(keymap, null, 2),
+        `${JSON.stringify(keymap, null, 2)}\n`,
         stagingDir,
       ),
       ...(gamepad
@@ -64,11 +66,11 @@ const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
       `Dry run: would create keymap.json in ${stagingDir} for device profile ${profile}`,
     );
     console.log(keymap);
-    console.log(`----------`);
-    console.log(
-      `Dry run: would create gamepad.json in ${stagingDir}. Actually sorry gamepad isn't implemented yet.`,
-    );
-    console.log(gamepad);
+    if (gamepad) {
+      console.log(`----------`);
+      console.log(`Dry run: would create gamepad.json in ${stagingDir}.`);
+      console.log(gamepad);
+    }
   }
 
   return "ok";
@@ -85,11 +87,6 @@ const verify = async (gameDir, { profile = "rg-rotate" }) => {
     `Verify: would create keymap.json in ${stagingDir} for device profile ${profile}`,
   );
   console.log(expectedKeymap);
-  console.log(`----------`);
-  console.log(
-    `Would also create gamepad.json in ${stagingDir}. Actually sorry gamepad isn't implemented yet.`,
-  );
-
   // Compare like-for-like:
   const installedRgaPath = path.join(stagingDir, "patch_input.rga");
 
@@ -104,6 +101,7 @@ const verify = async (gameDir, { profile = "rg-rotate" }) => {
     stagingDir,
     "keymap.json",
     expectedKeymap,
+    "patch_input.rga",
   );
 
   console.log("keymap.json is:", verificationsResults);

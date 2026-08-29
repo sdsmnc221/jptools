@@ -1,8 +1,9 @@
 *_.md
 
 nwjs-joiplay-patch/
-
+_not_*/
 node_modules/
+*diagnostics/
 
 # leftover from the removed WebView capture command; kept locally for the
 # log.txt that proved a WebView cannot read the button table
@@ -17,4 +18,5 @@ tests/../andr
 __pycache__/
 
 *.sh
-
+!wifi-ddebug/capture-log.sh
+logs/

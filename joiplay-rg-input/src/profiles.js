@@ -126,9 +126,24 @@ export const ELDERFIELD = {
   X: 59, // Android KEYCODE_SHIFT_LEFT -> WebView translates to DOM Shift(16) -> RPG Maker "shift"/dash
 };
 
-// Moonstone (Construct 3): same D-pad-to-WASD idea, but A -> SPACE, Y/Z -> I,
-// and L1/R1 -> arrow left/right for menu tabs. Same sixteen inputs, different
-// outputs, which is why separating device constants from per-game bindings.
+// Moonstone Island
+//
+//   movement  W/A/S/D       <-> gamepad D-pad 12/13/14/15
+//   confirm   Space         <-> A (0)
+//   cancel    Escape        <-> B (1)
+//   use       E             <-> X (2)
+//   inventory I             <-> Y (3)
+//   menu tabs Left/Right    <-> L1/R1 (4/5)
+//   wheel     Q             <-> L2 (6)
+//   shift     Shift         <-> R2 (7)
+//   map       M             <-> Select/Back (8)
+//
+// There is one keyboard-emulation mismatch we cannot express in keymap.json:
+// native gamepad B is context-sensitive (both cancel and SpecialAction), but
+// those are two different keyboard keys, Escape and R. Keep the conventional
+// B=cancel mapping and put R on Start so neither action is lost. The game's
+// native Start-only settings action has no keyboard binding; Escape opens or
+// closes the same menu path in normal play.
 export const MOONSTONE = {
   DPAD_UP: "W",
   DPAD_DOWN: "S",
@@ -138,13 +153,37 @@ export const MOONSTONE = {
   B: "ESCAPE",
   X: "E",
   Y: "I",
-  Z: "I",
   L1: "ARROW_LEFT",
   R1: "ARROW_RIGHT",
-  L2: "SHIFT",
-  R2: "C",
+  L2: "Q",
+  R2: "SHIFT",
+  START: "R",
+  SELECT: "M",
+};
+
+// Pokémon Insurgence 1.2.7 (RPG Maker XP / Pokémon Essentials).
+//
+// Face buttons cover the core Action, Cancel/Menu, Run, and Autorun actions.
+// Q/W retain Insurgence's menu scrolling as well as registered slots 1/2;
+// E/T provide registered slots 3/4. Start intentionally duplicates Menu rather
+// than exposing Quicksave/Speedup on an easy-to-hit physical control. DexNav is
+// useful enough to deserve Select; registered slot 5 (Y) remains available via
+// JoiPlay's keyboard overlay.
+export const POKEMON_INSURGENCE = {
+  DPAD_UP: "ARROW_UP",
+  DPAD_DOWN: "ARROW_DOWN",
+  DPAD_LEFT: "ARROW_LEFT",
+  DPAD_RIGHT: "ARROW_RIGHT",
+  A: "ENTER",
+  B: "ESCAPE",
+  X: "Z",
+  Y: "S",
+  L1: "Q",
+  R1: "W",
+  L2: "E",
+  R2: "T",
   START: "ESCAPE",
-  SELECT: "I",
+  SELECT: "D",
 };
 
 export const GLOBAL_DEFAULT = {
