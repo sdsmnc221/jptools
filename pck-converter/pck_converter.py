@@ -278,6 +278,14 @@ def extract(exe_path: str | Path, output_path: str | Path | None = None, force: 
         print(f"  MD5 verified {ok:,} files"
               + (f" ({skipped:,} had no checksum)" if skipped else ""))
 
+        # now we extract a placeholder <basename>.exe to the same directory as the .pck, 
+        # so that the game can be launched
+        placeholder_exe = output_path.with_suffix(".exe")
+        with placeholder_exe.open("wb") as ph:
+            ph.write(b"Placeholder executable for " + exe_path.name.encode() + b"\n")
+            ph.write(b"This is not a real executable. Please use the original game executable.\n")
+            print(f"  Created placeholder executable: {placeholder_exe}")
+
         temp_path.replace(output_path)
         return output_path
 
