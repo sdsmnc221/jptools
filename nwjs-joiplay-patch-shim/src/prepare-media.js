@@ -103,7 +103,6 @@ async function probeMedia(filePath) {
   const streams = parsed.streams ?? [];
 
   return {
-    filePath,
     videoStream: streams.find((stream) => stream.codec_type === "video"),
     audioStream: streams.find((stream) => stream.codec_type === "audio"),
     format: parsed.format ?? {},
@@ -205,6 +204,24 @@ function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
     frameRate: parseFrameRate(video.avg_frame_rate || video.r_frame_rate),
     formatName,
   };
+}
+
+function stableFfmpegArguments(
+  ffmpegArguments,
+  sourceArchivePath,
+  targetArchivePath,
+) {
+  const normalized = [...ffmpegArguments];
+
+  const inputIndex = normalized.indexOf("-i");
+  if (inputIndex !== -1 && inputIndex + 1 < normalized.length) {
+    normalized[inputIndex + 1] = `<SOURCE:${sourceArchivePath}>`;
+  }
+
+  // The output is the final argument in your command.
+  normalized[normalized.length - 1] = `<TARGET:${targetArchivePath}>`;
+
+  return normalized;
 }
 
 async function transcodeVideo(inputPath, outputPath) {
@@ -611,13 +628,27 @@ export async function prepareMedia(gameDir, reportPath) {
   });
   console.log(`Media mapping published to ${mappingPublication.destination}`);
 
+  const preparedFiles = processResult.transcodedFiles.map((file) => ({
+    sourceArchivePath: file.sourceArchivePath,
+    targetArchivePath: file.targetArchivePath,
+    inputHash: file.inputHash,
+    outputHash: file.outputHash,
+    inputProbe: file.inputProbe,
+    outputProbe: file.outputProbe,
+    validation: file.validation,
+    ffmpegArguments: stableFfmpegArguments(
+      file.ffmpegArguments,
+      file.sourceArchivePath,
+      file.targetArchivePath,
+    ),
+  }));
   const preparationReport = {
     version: 1,
     gameDir: resolvedGameDir,
     sourceReportPath: path.resolve(reportPath),
     mappingFile: "rg-media-map.json",
     mediaMapping,
-    files: processResult.transcodedFiles,
+    files: preparedFiles,
   };
   const preparationReportPath = path.join(stageDir, "preparation-report.json");
   const reportPublication = await publishTextFile({
@@ -636,7 +667,7 @@ export async function prepareMedia(gameDir, reportPath) {
     mappingPath,
     preparationReportPath,
     mediaMapping,
-    preparedFiles: processResult.transcodedFiles,
+    preparedFiles,
     mappingReused: mappingPublication.reused,
     reportReused: reportPublication.reused,
   };

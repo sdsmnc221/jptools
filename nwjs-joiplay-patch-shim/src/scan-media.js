@@ -161,10 +161,14 @@ function videoHasH264Mp4Alternative(dataJsonContent, tree, file) {
   const h264Mp4AlternativeExists = hasH264Mp4AlternativeDeclared
     ? existsSync(tree.resolve(path.join(path.dirname(file), declared)))
     : false;
+  const h264Mp4AlternativeArchivePath = hasH264Mp4AlternativeDeclared
+    ? path.posix.join(path.posix.dirname(file.replaceAll("\\", "/")), declared)
+    : null;
 
   return {
     hasH264Mp4AlternativeDeclared,
     h264Mp4AlternativeExists,
+    h264Mp4AlternativeArchivePath,
   };
 }
 
@@ -207,13 +211,16 @@ async function scanForVideoFiles(tree, engine) {
 
       let hasH264Mp4AlternativeDeclared = false;
       let h264Mp4AlternativeExists = false;
+      let h264Mp4AlternativeArchivePath = null;
       if (isVideo) {
         const {
           hasH264Mp4AlternativeDeclared: hasH264Mp4AlternativeDeclaredFromData,
           h264Mp4AlternativeExists: h264Mp4AlternativeExistsFromData,
+          h264Mp4AlternativeArchivePath: h264Mp4AlternativeArchivePathFromData,
         } = videoHasH264Mp4Alternative(dataJsonContent, tree, file);
         hasH264Mp4AlternativeDeclared = hasH264Mp4AlternativeDeclaredFromData;
         h264Mp4AlternativeExists = h264Mp4AlternativeExistsFromData;
+        h264Mp4AlternativeArchivePath = h264Mp4AlternativeArchivePathFromData;
         probeResult.hasH264Mp4AlternativeDeclared =
           hasH264Mp4AlternativeDeclared;
         probeResult.h264Mp4AlternativeExists = h264Mp4AlternativeExists;
@@ -246,12 +253,12 @@ async function scanForVideoFiles(tree, engine) {
 
         duration: format.duration ?? null,
 
-        hasH264Mp4AlternativeDeclared: hasH264Mp4AlternativeDeclared,
-        h264Mp4AlternativeExists: h264Mp4AlternativeExists,
-        h264Mp4AlternativeArchivePath: "_",
+        hasH264Mp4AlternativeDeclared,
+        h264Mp4AlternativeExists,
+        h264Mp4AlternativeArchivePath,
 
         contentHash: null, // not needed for now, but could be useful for future deduplication or integrity checks
-        evidenceLevel: "ffproble",
+        evidenceLevel: "ffprobe",
         verdict: verdict.verdict,
         recommendedAction: verdict.recommendedAction,
         reason: verdict.reason,
