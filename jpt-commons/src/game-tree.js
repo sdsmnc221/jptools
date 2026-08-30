@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { GameTreeError } from "jpt-commons/errors";
 import { rmSync } from "node:fs";
 import AdmZip from "adm-zip";
+import { MEDIA_EXTENSIONS } from "./utils/constants.js";
 
 export class GameTree {
   constructor(root) {
@@ -32,6 +33,10 @@ export class GameTree {
 
   async readText(relativePath) {
     return await readFile(this.resolve(relativePath), "utf-8");
+  }
+
+  async writeText(relativePath, content) {
+    await writeFile(this.resolve(relativePath), content, "utf-8");
   }
 
   async readBytes(relativePath) {
@@ -74,6 +79,7 @@ export class GameTree {
     let content = {
       where: null,
       unpackedNeeded: false,
+      unpackNeededForScanMedia: false,
       hasNwPackage: false,
       hasExe: false,
     };
@@ -102,6 +108,7 @@ export class GameTree {
         if (packageNwStat.isDirectory()) {
           content.where = this.resolve(packageNwPath);
           content.unpackedNeeded = false;
+
           return content;
         }
       }
@@ -111,6 +118,7 @@ export class GameTree {
         content.where = this.root;
         content.unpackedNeeded = false;
         content.hasNwPackage = true;
+        content.unpackNeededForScanMedia = true;
         return content;
       }
 
@@ -121,6 +129,7 @@ export class GameTree {
       if (exePath) {
         content.where = this.root;
         content.unpackedNeeded = true;
+        content.unpackNeededForScanMedia = true;
         content.hasExe = true;
         return content;
       }
@@ -133,18 +142,18 @@ export class GameTree {
     }
   }
 
-  // sbug exists
+  // bug exists
   // and would surface the moment Impact support is un-stubbed, but it's currently dead code for
   // everything the tool actually ships
   async unpackGame(options) {
-    if (options.unpackedNeeded === false) {
+    if (options.unpackNeededForScanMedia === false) {
       console.log("Game is already unpacked, no need to unpack.");
       return false;
     }
 
     // if the game is an exe and have package.nw
     // unpack the package.nw to a temporary directory
-    if (options.unpackedNeeded && options.hasNwPackage) {
+    if (options.unpackNeededForScanMedia && options.hasNwPackage) {
       if (!(await this.exists("package.nw"))) {
         throw new GameTreeError("package.nw not found in the game directory");
       }
@@ -159,7 +168,7 @@ export class GameTree {
           const unpackedGameDir = path.join(
             this.root,
             "..",
-            `${this.gameName}_unpacked`,
+            `${this.gameName}_${options.unpackOnlyMedia ? "media" : "unpacked"}`,
           );
           await mkdir(unpackedGameDir, { recursive: true });
 
@@ -173,7 +182,25 @@ export class GameTree {
           //   },
           // );
           const zip = new this.admZip(packageNwPath);
-          zip.extractAllTo(unpackedGameDir, true);
+          if (options.unpackOnlyMedia) {
+            let extracted = 0;
+            for (const entry of zip.getEntries()) {
+              if (entry.isDirectory) continue;
+              const ext = path.extname(entry.entryName).toLowerCase();
+              if (options.unpackDataJson) {
+                if (entry.entryName === "data.json") {
+                  zip.extractEntryTo(entry, unpackedGameDir, true, true);
+                  extracted++;
+                  continue;
+                }
+              }
+              if (!MEDIA_EXTENSIONS.includes(ext)) continue;
+              zip.extractEntryTo(entry, unpackedGameDir, true, true);
+              extracted++;
+            }
+          } else {
+            zip.extractAllTo(unpackedGameDir, true);
+          }
 
           return unpackedGameDir;
         } else {
@@ -182,6 +209,13 @@ export class GameTree {
       } catch (error) {
         throw new GameTreeError(`Failed to unpack game: ${error.message}`);
       }
+    } else if (options.unpackNeededForScanMedia && options.hasExe) {
+      // now how to unpack an exe?
+      // (a) Appended zip => copy /b nw.exe + package.nw = game.exe.
+      // The file is literally [PE  executable][ZIP archive]. Most common for nw.js.
+      // (b) Enigma Virtual Box => the whole folder tree is virtualised into the exe.
+      // Not a zip, and no amount of zip logic will open it.
+      // Very common for RPG Maker distributions.
     }
   }
 }

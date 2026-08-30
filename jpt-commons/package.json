@@ -8,7 +8,9 @@
     "./errors": "./src/errors.js",
     "./game-tree": "./src/game-tree.js",
     "./rga": "./src/rga.js",
-    "./verify-entry": "./src/verify-entry.js"
+    "./verify-entry": "./src/verify-entry.js",
+    "./utils/constants": "./src/utils/constants.js",
+    "./scan-media": "./src/scan-media.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

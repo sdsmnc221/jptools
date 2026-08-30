@@ -346,13 +346,13 @@ const diagnosticsForVideo = () => {
 };
 
 const runner = (engine) => {
-  if (engine === KNOWN_ENGINES.MZ) {
+  if (engine === "rpgmmz") {
     patchProcess();
     document.addEventListener("DOMContentLoaded", patchProcess);
     window.addEventListener("load", patchProcess);
   }
 
-  if (engine === KNOWN_ENGINES.CONSTRUCT) {
+  if (engine === "construct") {
     try {
       diagnosticsForVideo();
     } catch (error) {

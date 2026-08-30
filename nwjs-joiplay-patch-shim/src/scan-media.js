@@ -1,10 +1,5 @@
 import { GameTree } from "jpt-commons/game-tree";
-import {
-  AmbigousError,
-  UnsupportedError,
-  ShimError,
-  MediaScanError,
-} from "jpt-commons/errors";
+import { MediaScanError } from "jpt-commons/errors";
 import { getDefaultPatchDir } from "jpt-commons/rga";
 import { detectGameEngine } from "./detect.js";
 import path from "node:path";
@@ -21,7 +16,7 @@ import { MEDIA_EXTENSIONS, KNOWN_ENGINES } from "jpt-commons/utils/constants";
 // | `audio_only` | Media extension contains no video stream. |
 // | `out_of_scope_engine` | Asset exists, but this NW.js/JoiPlay tool must not patch that engine. |
 
-const VERDICTS = {
+export const VERDICTS = {
   pass_through: {
     verdict: "pass_through",
     recommendedAction: "none",
@@ -54,6 +49,13 @@ const VERDICTS = {
     recommendedAction: "none",
     reason:
       "Asset exists, but this NW.js/JoiPlay tool must not patch that engine. I only support Construct3",
+    warnings: [],
+  },
+  action_needed: {
+    verdict: "action_needed",
+    recommendedAction: "review",
+    reason:
+      "One or more media assets require attention based on the scan results.",
     warnings: [],
   },
 };
@@ -204,6 +206,9 @@ async function scanForVideoFiles(tree, engine) {
         } = videoHasH264Mp4Alternative(dataJsonContent, tree, file);
         hasH264Mp4AlternativeDeclared = hasH264Mp4AlternativeDeclaredFromData;
         h264Mp4AlternativeExists = h264Mp4AlternativeExistsFromData;
+        probeResult.hasH264Mp4AlternativeDeclared =
+          hasH264Mp4AlternativeDeclared;
+        probeResult.h264Mp4AlternativeExists = h264Mp4AlternativeExists;
       }
 
       const verdict = determineVerdict(probeResult, engine);
@@ -214,6 +219,7 @@ async function scanForVideoFiles(tree, engine) {
         byteSize: format.size,
 
         ...(probe.videoCodec ? { videoCodec: probe.videoCodec } : {}),
+        ...(probe.codec_name ? { codec_name: probe.codec_name } : {}),
         ...(probe.audioCodec ? { audioCodec: probe.audioCodec } : {}),
         ...(probe.profile ? { profile: probe.profile } : {}),
         ...(probe.width ? { width: probe.width } : {}),
@@ -303,7 +309,19 @@ export async function scanMedia(gameDir) {
       );
       report.result = Object.values(report.mediaScan)
         .flat()
-        .find((result) => result.verdict !== VERDICTS.pass_through.verdict);
+        .filter((result) => result.verdict !== VERDICTS.pass_through.verdict);
+
+      report.verdict =
+        report.result.length > 0
+          ? VERDICTS.action_needed.verdict
+          : VERDICTS.pass_through.verdict;
+
+      // Write report to a JSON file in the game directory for later inspection
+      const reportPath = path.join(unpackedDir, "media_scan_report.json");
+      await tree.writeText(reportPath, JSON.stringify(report, null, 2));
+      console.log(`Media scan report written to ${reportPath}`);
+
+      report.mediaScanPath = reportPath;
     }
   } else if (gameContent.unpackedNeeded) {
     console.log("No unpacked content needed.");
