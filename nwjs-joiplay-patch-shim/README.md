@@ -30,11 +30,15 @@ On desktop the game runs under NW.js = Chromium + Nodejs, where `process` is a r
 ### Install the CLI
 
 ```bash
+cd /path/to/joiplay.tools
 pnpm install
-pnpm shim-on
 # or yarn, npm, npx, whatever you were using.
-# This is under node.js with additional package adm-zip
+# This is under node.js with additional package adm-zip and ffmpeg
+pnpm --filter nwjs-joiplay-patch-shim run shim-on
 ```
+
+> pnpm install downloads platform-specific FFmpeg and FFprobe binaries into the workspace. It does not install system-wide FFmpeg.
+> The preparation command uses these bundled binaries.
 
 ### Detect (you can skip)
 
