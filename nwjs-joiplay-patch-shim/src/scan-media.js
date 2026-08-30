@@ -273,6 +273,7 @@ async function scanForVideoFiles(tree, engine) {
 }
 
 export async function scanMedia(gameDir) {
+  let scanRoot;
   const tree = new GameTree(gameDir);
 
   const gameContent = await tree.whereIsTheContent();
@@ -309,40 +310,44 @@ export async function scanMedia(gameDir) {
   //   multi-gigabyte Godot or Unity data file merely to search for movie names
 
   if (gameContent.unpackNeededForScanMedia) {
-    if (gameContent.hasExe) {
-      console.log("need to scan the unpacked content of the exe");
-    } else if (gameContent.hasNwPackage) {
-      console.log("need to scan the unpacked content of package.nw");
-      const unpackedDir = await tree.unpackGame({
-        ...gameContent,
-        unpackOnlyMedia: true,
-        unpackDataJson: true,
-      });
-      console.log(`Unpacked content to ${unpackedDir}`);
-      report.mediaScan = await scanForVideoFiles(
-        new GameTree(unpackedDir),
-        detectionResult.engine,
-      );
-
-      report.result = report.mediaScan.videoFiles.filter((record) =>
-        actionableVerdicts.has(record.verdict),
-      );
-
-      report.verdict =
-        report.result.length > 0
-          ? VERDICTS.action_needed.verdict
-          : VERDICTS.pass_through.verdict;
-
-      // Write report to a JSON file in the game directory for later inspection
-      const reportPath = path.join(unpackedDir, "media_scan_report.json");
-      await tree.writeText(reportPath, JSON.stringify(report, null, 2));
-      console.log(`Media scan report written to ${reportPath}`);
-
-      report.mediaScanPath = reportPath;
-    }
-  } else if (gameContent.unpackedNeeded) {
-    console.log("No unpacked content needed.");
+    scanRoot = await tree.unpackGame({
+      ...gameContent,
+      unpackOnlyMedia: true,
+      unpackDataJson: true,
+    });
+    console.log(`Unpacked content to ${scanRoot}`);
+  } else {
+    // Loose game or package.nw directory: already available.
+    scanRoot = gameContent.where;
   }
+
+  // For hasExe, unpackGame() currently returns undefined, because that branch is
+  // only comments. Add a check before constructing GameTree
+  if (!scanRoot) {
+    throw new MediaScanError(
+      `Could not obtain scannable content from ${gameContent.where}`,
+    );
+  }
+
+  const scanTree = new GameTree(scanRoot);
+
+  report.mediaScan = await scanForVideoFiles(scanTree, detectionResult.engine);
+
+  report.result = report.mediaScan.videoFiles.filter((record) =>
+    actionableVerdicts.has(record.verdict),
+  );
+
+  report.verdict =
+    report.result.length > 0
+      ? VERDICTS.action_needed.verdict
+      : VERDICTS.pass_through.verdict;
+
+  // Write report to a JSON file in the game directory for later inspection
+  const reportPath = path.join(scanRoot, "media_scan_report.json");
+  await scanTree.writeText(reportPath, JSON.stringify(report, null, 2));
+  console.log(`Media scan report written to ${reportPath}`);
+
+  report.mediaScanPath = reportPath;
 
   return report;
 }
