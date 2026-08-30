@@ -168,7 +168,8 @@ export async function packConstruct3(
     {
       file: "scripts/main.js",
       key: 'exportType:"nwjs"',
-      value: 'exportType:"html5"',
+      value:
+        'exportType:(await(globalThis.__rgMediaMapReady||Promise.resolve()),"html5")',
     },
     {
       file: "index.html",

@@ -13,6 +13,146 @@ const patchProcess = () => {
   });
 };
 
+const installMediaRedirect = () => {
+  const scope = globalThis;
+  const rootUrl = new URL("./", document.baseURI);
+  const redirects = new Map();
+
+  const normalizeArchivePath = (value) => {
+    if (typeof value !== "string") return null;
+
+    const normalized = value.replaceAll("\\", "/");
+
+    if (
+      !normalized ||
+      normalized.startsWith("/") ||
+      normalized.includes("?") ||
+      normalized.includes("#") ||
+      /^[a-z][a-z\d+.-]*:/i.test(normalized)
+    ) {
+      return null;
+    }
+
+    const parts = normalized.split("/");
+
+    if (parts.some((part) => !part || part === "." || part === "..")) {
+      return null;
+    }
+
+    return parts.join("/");
+  };
+
+  const canonicalUrl = (value) => {
+    try {
+      const url = new URL(value, rootUrl);
+
+      url.search = "";
+      url.hash = "";
+
+      if (
+        url.protocol !== rootUrl.protocol ||
+        url.host !== rootUrl.host ||
+        !url.pathname.startsWith(rootUrl.pathname)
+      ) {
+        return null;
+      }
+
+      return url.href;
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const resolveMediaUrl = (value) => {
+    const key = canonicalUrl(value);
+    return (key && redirects.get(key)) || value;
+  };
+
+  const descriptor = Object.getOwnPropertyDescriptor(
+    HTMLMediaElement.prototype,
+    "src",
+  );
+
+  if (!descriptor?.get || !descriptor?.set || !descriptor.configurable) {
+    throw new Error("HTMLMediaElement.src cannot be patched");
+  }
+
+  Object.defineProperty(HTMLMediaElement.prototype, "src", {
+    configurable: descriptor.configurable,
+    enumerable: descriptor.enumerable,
+
+    get() {
+      return descriptor.get.call(this);
+    },
+
+    set(value) {
+      const redirected = resolveMediaUrl(value);
+
+      if (redirected !== value) {
+        console.info("[rg-media-map] redirect", {
+          source: canonicalUrl(value),
+          target: redirected,
+        });
+      }
+
+      return descriptor.set.call(this, redirected);
+    },
+  });
+
+  const ready = (async () => {
+    const mapUrl = new URL("rg-media-map.json", rootUrl);
+    const response = await fetch(mapUrl, { cache: "no-store" });
+
+    if (response.status === 404) {
+      console.info("[rg-media-map] no mapping installed");
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(`mapping request failed with HTTP ${response.status}`);
+    }
+
+    const mapping = await response.json();
+
+    if (!mapping || Array.isArray(mapping) || typeof mapping !== "object") {
+      throw new Error("mapping must be a JSON object");
+    }
+
+    for (const [rawSource, rawTarget] of Object.entries(mapping)) {
+      const source = normalizeArchivePath(rawSource);
+      const target = normalizeArchivePath(rawTarget);
+
+      if (!source || !target) {
+        throw new Error(`unsafe mapping: ${rawSource} -> ${rawTarget}`);
+      }
+
+      const sourceUrl = canonicalUrl(source);
+      const targetUrl = canonicalUrl(target);
+
+      if (!sourceUrl || !targetUrl) {
+        throw new Error(`mapping escapes game root: ${source} -> ${target}`);
+      }
+
+      if (redirects.has(sourceUrl)) {
+        throw new Error(`duplicate mapping source: ${source}`);
+      }
+
+      redirects.set(sourceUrl, targetUrl);
+    }
+
+    console.info("[rg-media-map] loaded", {
+      entries: redirects.size,
+    });
+  })().catch((error) => {
+    // A missing or invalid optional media patch must not stop the game.
+    redirects.clear();
+    console.warn("[rg-media-map] disabled", error);
+  });
+
+  scope.__rgMediaMapReady = ready;
+  return ready;
+};
+
 const diagnosticsForVideo = () => {
   const scope = typeof globalThis === "object" ? globalThis : window;
   const installKey =
@@ -354,9 +494,14 @@ const runner = (engine) => {
 
   if (engine === "construct") {
     try {
+      installMediaRedirect();
+    } catch (error) {
+      console.warn("[rg-media-map] install-error", error);
+    }
+
+    try {
       diagnosticsForVideo();
     } catch (error) {
-      // Diagnostics must never prevent the game itself from starting.
       console.warn("[rg-video-diag] install-error", error);
     }
   }

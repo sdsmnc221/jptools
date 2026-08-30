@@ -1,7 +1,11 @@
 import { MEDIA_EXTENSIONS, KNOWN_ENGINES } from "jpt-commons/utils/constants";
 import { GameTree } from "jpt-commons/game-tree";
 import { MediaPrepareError } from "jpt-commons/errors";
-import { getDefaultPatchDir } from "jpt-commons/rga";
+import {
+  getDefaultPatchDir,
+  writeRgaFromDirectory,
+  verifyRgaArchive,
+} from "jpt-commons/rga";
 import { detectGameEngine } from "./detect.js";
 import { VERDICTS } from "./scan-media.js";
 import path from "node:path";
@@ -9,7 +13,15 @@ import { existsSync, readFileSync, createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { link, lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import {
+  link,
+  lstat,
+  mkdir,
+  mkdtemp,
+  rm,
+  writeFile,
+  rename,
+} from "node:fs/promises";
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "@derhuerst/ffprobe-static";
 
@@ -339,6 +351,7 @@ async function publishWithoutOverwrite(
   temporaryOutput,
   destination,
   expectedHash,
+  { force = false } = {},
 ) {
   try {
     // Atomic and refuses to replace an existing path.
@@ -382,9 +395,20 @@ async function publishWithoutOverwrite(
   const existingHash = await hashFile(destination);
 
   if (existingHash !== expectedHash) {
-    throw new MediaPrepareError(
-      `Prepared destination already exists with different content: ${destination}`,
-    );
+    if (!force) {
+      throw new MediaPrepareError(
+        `Prepared destination already exists with different content: ${destination}`,
+      );
+    }
+
+    await rename(temporaryOutput, destination);
+
+    return {
+      destination,
+      reused: false,
+      replaced: true,
+      outputHash: expectedHash,
+    };
   }
 
   return {
@@ -394,7 +418,12 @@ async function publishWithoutOverwrite(
   };
 }
 
-async function publishTextFile({ content, destination, stageDir }) {
+async function publishTextFile({
+  content,
+  destination,
+  stageDir,
+  force = false,
+}) {
   const temporaryDir = await mkdtemp(path.join(stageDir, ".tmp", "metadata-"));
 
   try {
@@ -412,6 +441,7 @@ async function publishTextFile({ content, destination, stageDir }) {
       temporaryFile,
       destination,
       contentHash,
+      { force },
     );
   } finally {
     await rm(temporaryDir, {
@@ -523,7 +553,11 @@ async function processMediaFiles(
   };
 }
 
-export async function prepareMedia(gameDir, reportPath) {
+export async function prepareMedia(
+  gameDir,
+  reportPath,
+  { force = false } = {},
+) {
   //     <Game>_patch/
   //   └── _decoded_assets.stage/
   //       ├── payload/
@@ -625,9 +659,63 @@ export async function prepareMedia(gameDir, reportPath) {
     content: mappingContent,
     destination: mappingPath,
     stageDir,
+    force,
   });
   console.log(`Media mapping published to ${mappingPublication.destination}`);
 
+  const temporaryRgaDir = await mkdtemp(path.join(stageDir, ".tmp", "rga-"));
+
+  // Produce the RGA patch file for media in staging directory
+  const temporaryRgaPath = path.join(temporaryRgaDir, "_decoded_assets.rga");
+
+  const rgaPath = path.join(patchDir, "_decoded_assets.rga");
+
+  let rgaResult;
+
+  try {
+    rgaResult = await writeRgaFromDirectory(payloadDir, temporaryRgaPath);
+
+    // Verify entries and prepared-file hashes here.
+    verifyRgaArchive(temporaryRgaPath, {
+      expectedEntries: rgaResult.archiveEntries,
+
+      requiredEntries: ["rg-media-map.json"],
+
+      hashedEntries: [
+        {
+          archivePath: "rg-media-map.json",
+          sha256: mappingPublication.outputHash,
+        },
+
+        ...processResult.transcodedFiles.map((file) => ({
+          archivePath: file.targetArchivePath,
+          sha256: file.outputHash,
+        })),
+      ],
+    });
+
+    const rgaHash = await hashFile(temporaryRgaPath);
+    const rgaPublication = await publishWithoutOverwrite(
+      temporaryRgaPath,
+      rgaPath,
+      rgaHash,
+      { force },
+    );
+
+    rgaResult = {
+      ...rgaResult,
+      rgaPath,
+      rgaHash,
+      reused: rgaPublication.reused,
+    };
+  } finally {
+    await rm(temporaryRgaDir, {
+      recursive: true,
+      force: true,
+    });
+  }
+
+  // Writing Report
   const preparedFiles = processResult.transcodedFiles.map((file) => ({
     sourceArchivePath: file.sourceArchivePath,
     targetArchivePath: file.targetArchivePath,
@@ -649,12 +737,18 @@ export async function prepareMedia(gameDir, reportPath) {
     mappingFile: "rg-media-map.json",
     mediaMapping,
     files: preparedFiles,
+    rga: {
+      file: path.basename(rgaResult.rgaPath),
+      sha256: rgaResult.rgaHash,
+      entries: rgaResult.archiveEntries,
+    },
   };
   const preparationReportPath = path.join(stageDir, "preparation-report.json");
   const reportPublication = await publishTextFile({
     content: JSON.stringify(preparationReport, null, 2) + "\n",
     destination: preparationReportPath,
     stageDir,
+    force,
   });
 
   console.log(
@@ -666,9 +760,14 @@ export async function prepareMedia(gameDir, reportPath) {
     payloadDir,
     mappingPath,
     preparationReportPath,
+    rgaPath: rgaResult.rgaPath,
+    rgaHash: rgaResult.rgaHash,
     mediaMapping,
     preparedFiles,
-    mappingReused: mappingPublication.reused,
-    reportReused: reportPublication.reused,
+    run: {
+      rgaReused: rgaResult.reused,
+      mappingReused: mappingPublication.reused,
+      reportReused: reportPublication.reused,
+    },
   };
 }

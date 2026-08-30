@@ -26,6 +26,7 @@ const main = async () => {
   const [command, gameDir, ...options] = args;
 
   const isDryRun = options.includes("--dry-run");
+  const isForce = options.includes("--force");
   const reportPathOptionIndex = options.indexOf("--report-path");
   const reportPath =
     reportPathOptionIndex !== -1 ? options[reportPathOptionIndex + 1] : null;
@@ -67,8 +68,14 @@ const main = async () => {
           "Missing --report-path option for prepare-media command.",
         );
       }
-      result = await prepareMedia(gameDir, reportPath);
-      console.log(result);
+      result = await prepareMedia(gameDir, reportPath, { force: isForce });
+      if (result.rgaPath) {
+        console.log(`RGA file prepared at: ${result.rgaPath}`);
+        console.log(
+          "You may add the game to JoiPlay, apply patch and hope it works",
+        );
+      }
+
       break;
     default:
       console.error(`Unknown command: ${command}`);
