@@ -4,14 +4,172 @@ import { getDefaultPatchDir } from "jpt-commons/rga";
 import { detectGameEngine } from "./detect.js";
 import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
-import { spawn } from "node:child_process";
+
 import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "@derhuerst/ffprobe-static";
 import { MEDIA_EXTENSIONS, KNOWN_ENGINES } from "jpt-commons/utils/constants";
 import { VERDICTS } from "./scan-media.js";
+import { execFile, spawn } from "node:child_process";
+import { promisify } from "node:util";
 
-export async function transcodeVideo(inputPath, outputPath) {
+const execFileAsync = promisify(execFile);
+
+// https://gist.github.com/iperelivskiy/4110988?permalink_comment_id=2697447#gistcomment-2697447
+function funhash(s) {
+  for (let i = 0, h = 0xdeadbeef; i < s.length; i++)
+    h = Math.imul(h ^ s.charCodeAt(i), 2654435761);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+function compatibilityArchivePath(sourceArchivePath, inputHash) {
+  const extension = path.posix.extname(sourceArchivePath);
+  const basename = sourceArchivePath.slice(0, -extension.length);
+
+  return `${basename}.rg-compat-${inputHash.slice(0, 12)}.mp4`;
+}
+
+function parseFrameRate(value) {
+  if (!value) return null;
+
+  const [numerator, denominator = "1"] = value.split("/").map(Number);
+
+  if (
+    !Number.isFinite(numerator) ||
+    !Number.isFinite(denominator) ||
+    denominator === 0
+  ) {
+    return null;
+  }
+
+  return numerator / denominator;
+}
+
+async function probeMedia(filePath) {
+  let stdout;
+
+  try {
+    const result = await execFileAsync(
+      ffprobePath,
+      [
+        "-v",
+        "error",
+        "-show_entries",
+        [
+          "stream=index,codec_type,codec_name,profile,level,pix_fmt",
+          "width,height,avg_frame_rate,r_frame_rate",
+          "format=format_name,duration,size",
+        ].join(":"),
+        "-of",
+        "json",
+        filePath,
+      ],
+      {
+        encoding: "utf8",
+        maxBuffer: 1024 * 1024,
+      },
+    );
+
+    stdout = result.stdout;
+  } catch (error) {
+    throw new MediaPrepareError(
+      `ffprobe failed for ${filePath}: ${error.message}`,
+    );
+  }
+
+  let parsed;
+
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (error) {
+    throw new MediaPrepareError(
+      `ffprobe returned invalid JSON for ${filePath}: ${error.message}`,
+    );
+  }
+
+  const streams = parsed.streams ?? [];
+
+  return {
+    filePath,
+    videoStream: streams.find((stream) => stream.codec_type === "video"),
+    audioStream: streams.find((stream) => stream.codec_type === "audio"),
+    format: parsed.format ?? {},
+  };
+}
+
+async function validateTemOutputResult(probe, { sourceHadAudio } = {}) {
+  // After FFmpeg succeeds, run the bundled ffprobePath against temporaryOutput.
+  //   Reject the output unless:
+  //   file size > 0
+  //   video stream exists
+  //   video codec = h264
+  //   pixel format = yuv420p
+  //   width <= 1280
+  //   height <= 720
+  //   frame rate <= 30
+  //   audio codec = aac, when the input had audio
+
+  const errors = [];
+  const video = probe.videoStream;
+  const audio = probe.audioStream;
+  const byteSize = Number(probe.format.size ?? 0);
+
+  if (byteSize <= 0) {
+    errors.push("Output is empty");
+  }
+
+  if (!video) {
+    errors.push("Output has no video stream");
+  } else {
+    if (video.codec_name !== "h264") {
+      errors.push(`Video codec is not h264 (found ${video.codec_name})`);
+    }
+    if (video.pix_fmt !== "yuv420p") {
+      errors.push(`Video pixel format is not yuv420p (found ${video.pix_fmt})`);
+    }
+    if (Number(video.width) > 1280 || Number(video.height) > 720) {
+      errors.push(
+        `Video resolution exceeds 1280x720 (found ${video.width}x${video.height})`,
+      );
+    }
+
+    const frameRate = parseFrameRate(
+      video.avg_frame_rate || video.r_frame_rate,
+    );
+    if (frameRate === null) {
+      errors.push("Video frame rate is invalid or missing");
+    } else if (frameRate > 30.001) {
+      errors.push(
+        `Video frame rate exceeds 30 fps (found ${frameRate.toFixed(2)} fps)`,
+      );
+    }
+  }
+
+  if (sourceHadAudio && !audio) {
+    errors.push("Output has no audio stream, but the input had audio");
+  } else if (sourceHadAudio && audio.codec_name !== "aac") {
+    errors.push(`Audio codec is not aac (found ${audio.codec_name})`);
+  }
+
+  if (errors.length > 0) {
+    throw new MediaPrepareError(`Validation failed:\n- ${errors.join("\n- ")}`);
+  }
+
+  return {
+    byteSize,
+    videoCodec: video.codec_name,
+    audioCodec: audio?.codec_name ?? null,
+    profile: video.profile,
+    level: video.level,
+    pixelFormat: video.pix_fmt,
+    width: Number(video.width),
+    height: Number(video.height),
+    frameRate: parseFrameRate(video.avg_frame_rate || video.r_frame_rate),
+    formatName: probe.format.format_name,
+  };
+}
+
+async function transcodeVideo(inputPath, outputPath) {
   // VP8, VP9, AV1, HEVC, non-`yuv420p`, 10-bit color, dimensions above 1280×720,
   // or rates above 30 fps therefore select a conservative alternative for the
   // Construct worker path. They remain warnings—not automatic transcoding
@@ -56,18 +214,38 @@ export async function transcodeVideo(inputPath, outputPath) {
     outputPath,
   ];
 
+  const MAX_STDERR = 64 * 1024;
+  let stderrTail = "";
+
   const childProcess = spawn(ffmpegPath, ffmpegArgs, {
     stdio: ["ignore", "ignore", "pipe"],
+  });
+
+  childProcess.stderr.setEncoding("utf8");
+
+  childProcess.stderr.on("data", (chunk) => {
+    stderrTail += chunk;
+
+    if (stderrTail.length > MAX_STDERR) {
+      stderrTail = stderrTail.slice(-MAX_STDERR);
+    }
   });
 
   return new Promise((resolve, reject) => {
     childProcess.on("close", (code) => {
       if (code === 0) {
-        resolve({ inputPath, outputPath });
+        resolve({
+          inputPath,
+          temporaryOutput,
+          ffmpegPath,
+          ffmpegArgs,
+          stderrTail,
+        });
       } else {
         reject(
           new MediaPrepareError(
-            `FFmpeg exited with code ${code} while transcoding ${inputPath}`,
+            `FFmpeg exited with code ${code} while transcoding ${inputPath}\n` +
+              stderrTail.trim(),
           ),
         );
       }
@@ -84,7 +262,8 @@ export async function transcodeVideo(inputPath, outputPath) {
 }
 
 export async function processMediaFiles(
-  tree,
+  inputTree,
+  payloadTree,
   audioFilesToPrepare,
   videoFilesWithShippedAlternatives,
   videoFilesToTranscode,
@@ -102,14 +281,44 @@ export async function processMediaFiles(
     `Video files to transcode: ${videoFilesToTranscode.length} files`,
   );
 
+  // produce a safe intermediate asset:
+  //   1. Hash the input.
+  //   2. Create a temporary directory on the destination volume.
+  const simpleHash = funhash(mediaDir).toString(16);
+  await mkdir(path.join(stageDir, ".tmp"), { recursive: true });
+
+  const temporaryDir = await mkdtemp(path.join(stageDir, ".tmp", "transcode-"));
+
+  const temporaryOutput = path.join(temporaryDir, "output.mp4");
+
   let transcodedFiles = [];
   for (const fileReport of videoFilesToTranscode) {
-    const inputPath = tree.resolve(fileReport.archivePath);
-    const outputPath = tree.resolve(
-      fileReport.archivePath.replace(/\.[^/.]+$/, ".mp4"),
+    // 3. Transcode to a unique temporary filename.
+    const tempOutputFilename = compatibilityArchivePath(
+      fileReport.archivePath,
+      simpleHash,
     );
+    const inputPath = inputTree.resolve(fileReport.archivePath);
+    const outputPath = payloadTree.resolve(
+      path.join(temporaryDir, tempOutputFilename),
+    );
+
+    // Probe the input before transcoding and the temporary output afterward:
+    const inputProbe = await probeMedia(inputPath);
     const transcodingResult = await transcodeVideo(inputPath, outputPath);
-    transcodedFiles.push(transcodingResult);
+
+    const outputProbe = await probeMedia(temporaryOutput);
+
+    const validationResult = await validateTemOutputResult(outputProbe, {
+      sourceHadAudio: !!inputProbe.audioStream,
+    }).catch((error) => {
+      // If validation fails, delete the temporary output and leave the staging payloa unchanged.
+      rmSync(temporaryOutput, { force: true });
+      console.error("Validation failed for temporary output:", error);
+      return false;
+    });
+
+    return validationResult;
   }
 
   return {
@@ -118,10 +327,23 @@ export async function processMediaFiles(
 }
 
 export async function prepareMedia(gameDir, reportPath, engine) {
-  const mediaDir = path.resolve(path.dirname(reportPath));
-  const tree = new GameTree(mediaDir);
+  //     <Game>_patch/
+  //   └── _decoded_assets.stage/
+  //       ├── payload/
+  //       │   ├── media/
+  //       │   │   └── Video.rg-compat-<hash>.mp4
+  //       │   └── rg-media-map.json
+  //       └── preparation-report.json
 
-  const reportContent = await tree.readText(reportPath);
+  const gameName = path.basename(path.resolve(gameDir));
+  const patchDir = getDefaultPatchDir(gameDir, gameName);
+  const stageDir = path.join(patchDir, "_decoded_assets.stage");
+  const payloadDir = path.join(stageDir, "payload");
+
+  const inputTree = new GameTree(path.dirname(reportPath));
+  const payloadTree = new GameTree(payloadDir);
+
+  const reportContent = await inputTree.readText(reportPath);
 
   let report;
   try {
@@ -131,7 +353,6 @@ export async function prepareMedia(gameDir, reportPath, engine) {
 
     // We only care about the media files that need to be prepared,
     // so we filter the report accordingly
-
     console.log("Preparing media files based on the report...");
     // 1. If the file is audio-only, use `audio_only` regardless of its extension.
     const audioFilesToPrepare = mediaScan.audioOnlyFiles.filter(
@@ -169,13 +390,18 @@ export async function prepareMedia(gameDir, reportPath, engine) {
     );
 
     const processResult = await processMediaFiles(
-      tree,
+      inputTree,
+      payloadTree,
       audioFilesToPrepare,
       videoFilesWithShippedAlternatives,
       videoFilesToTranscode,
     );
 
-    return processResult;
+    // now we can safely:
+    //   1. Hash the output.
+    //   2. Publish it into the staging payload.
+    //   3. Add its source/target entry to rg-media-map.json.
+    //   4. Record the probe results in preparation-report.json.
   } catch (error) {
     throw new MediaPrepareError(
       `Failed to parse report file at ${reportPath}: ${error.message}`,
