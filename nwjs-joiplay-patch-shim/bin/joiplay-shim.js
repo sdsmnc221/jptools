@@ -13,6 +13,7 @@ import { scanMedia, VERDICTS } from "../src/scan-media.js";
 import { prepareMedia } from "../src/prepare-media.js";
 import { ShimError, MediaPrepareError } from "jpt-commons/errors";
 import { GameTree } from "jpt-commons/game-tree";
+import path from "path";
 
 const args = process.argv.slice(2);
 
@@ -56,7 +57,7 @@ const main = async () => {
       } else {
         console.log("Media files need to be prepared for this game.");
         console.log(
-          `Run the command: joiplay-shim prepare-media "${gameDir}" --report-path "${result.mediaScanPath}" to prepare media files for the game.`,
+          `Run the command: joiplay-shim prepare-media "${path.resolve(gameDir)}" --report-path "${result.mediaScanPath}" to prepare media files for the game.`,
         );
       }
       break;
