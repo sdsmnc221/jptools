@@ -468,9 +468,10 @@ export async function prepareMedia(gameDir, reportPath) {
   //       │   │   └── Video.rg-compat-<hash>.mp4
   //       │   └── rg-media-map.json
   //       └── preparation-report.json
+  const resolvedGameDir = path.resolve(gameDir);
+  const gameName = path.basename(resolvedGameDir);
 
-  const gameName = path.basename(path.resolve(gameDir));
-  const patchDir = getDefaultPatchDir(gameDir, gameName);
+  const patchDir = getDefaultPatchDir(resolvedGameDir, gameName);
   const stageDir = path.join(patchDir, "_decoded_assets.stage");
   const payloadDir = path.join(stageDir, "payload");
 
@@ -482,6 +483,16 @@ export async function prepareMedia(gameDir, reportPath) {
   let report;
   try {
     report = JSON.parse(reportContent);
+
+    const reportedGameDir = path.resolve(report.gameDir);
+
+    if (reportedGameDir !== resolvedGameDir) {
+      throw new MediaPrepareError(
+        `Game directory does not match the scan report:\n` +
+          `CLI: ${resolvedGameDir}\n` +
+          `Report: ${reportedGameDir}`,
+      );
+    }
   } catch (error) {
     throw new MediaPrepareError(
       `Failed to parse report file at ${reportPath}: ${error.message}`,
