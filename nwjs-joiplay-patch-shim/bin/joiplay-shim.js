@@ -43,7 +43,7 @@ const main = async () => {
       break;
     case "scan-media":
       result = await scanMedia(gameDir);
-      console.log("Media scan result:", result);
+      console.log("Media scan result:", result.result);
       break;
     default:
       console.error(`Unknown command: ${command}`);
