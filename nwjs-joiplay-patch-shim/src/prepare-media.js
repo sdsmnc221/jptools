@@ -9,6 +9,8 @@ import { existsSync, readFileSync, createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
+
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "@derhuerst/ffprobe-static";
 
@@ -99,7 +101,7 @@ async function probeMedia(filePath) {
   };
 }
 
-async function validateTemOutputResult(probe, { sourceHadAudio } = {}) {
+async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
   // After FFmpeg succeeds, run the bundled ffprobePath against temporaryOutput.
   //   Reject the output unless:
   //   file size > 0
@@ -272,9 +274,6 @@ export async function processMediaFiles(
   videoFilesToTranscode,
 ) {
   // Audio file, technically audio passed through
-  console.log(
-    `Audio files to prepare: 0 / ${audioFilesToPrepare.length} files`,
-  );
 
   // Prepare exact URL mapping if Construct would otherwise prefer the riskier source.
   // I will implement this when the time comes
@@ -288,12 +287,15 @@ export async function processMediaFiles(
   await mkdir(path.join(stageDir, ".tmp"), { recursive: true });
 
   let transcodedFiles = [];
-  for (const fileReport of videoFilesToTranscode) {
-    const temporaryDir = await mkdtemp(
-      path.join(stageDir, ".tmp", "transcode-"),
-    );
-    const temporaryOutput = path.join(temporaryDir, "output.mp4");
 
+  //   transcode
+  //   → probe
+  //   → validate
+  //   → hash
+  //   → publish
+  //   → record result
+  //   → finally remove temporary directory
+  for (const fileReport of videoFilesToTranscode) {
     const inputPath = inputTree.resolve(fileReport.archivePath);
     const inputHash = await hashFile(inputPath);
 
@@ -301,36 +303,56 @@ export async function processMediaFiles(
       fileReport.archivePath,
       inputHash,
     );
+
     const destination = payloadTree.resolve(targetArchivePath);
 
+    const temporaryDir = await mkdtemp(
+      path.join(stageDir, ".tmp", "transcode-"),
+    );
+
     try {
-      // Probe the input before transcoding and the temporary output afterward, one file per file
+      const temporaryOutput = path.join(temporaryDir, "output.mp4");
+
       const inputProbe = await probeMedia(inputPath);
+
       const transcodingResult = await transcodeVideo(
         inputPath,
         temporaryOutput,
       );
 
       const outputProbe = await probeMedia(temporaryOutput);
+
+      const validation = validateTemporaryOutput(outputProbe, {
+        sourceHadAudio: Boolean(inputProbe.audioStream),
+      });
+
+      const outputHash = await hashFile(temporaryOutput);
+
+      await mkdir(path.dirname(destination), {
+        recursive: true,
+      });
+
+      await publishWithoutOverwrite(temporaryOutput, destination, outputHash);
+
+      transcodedFiles.push({
+        sourceArchivePath: fileReport.archivePath,
+        targetArchivePath,
+        destination,
+        inputHash,
+        outputHash,
+        inputProbe,
+        outputProbe,
+        validation,
+        ffmpegArguments: transcodingResult.ffmpegArgs,
+      });
     } catch (error) {
       throw new MediaPrepareError(
-        `Failed to process media file ${inputPath}: ${error.message}`,
+        `Failed to process ${inputPath}: ${error.message}`,
       );
     } finally {
       await rm(temporaryDir, {
         recursive: true,
         force: true,
-      });
-      const validation = validateTemporaryOutput(outputProbe, {
-        sourceHadAudio: Boolean(inputProbe.audioStream),
-      });
-      transcodedFiles.push({
-        sourceArchivePath: fileReport.archivePath,
-        targetArchivePath,
-        inputHash,
-        outputHash,
-        validation,
-        ffmpegArguments: transcodingResult.ffmpegArgs,
       });
     }
   }
@@ -340,7 +362,7 @@ export async function processMediaFiles(
   };
 }
 
-export async function prepareMedia(gameDir, reportPath, engine) {
+export async function prepareMedia(gameDir, reportPath) {
   //     <Game>_patch/
   //   └── _decoded_assets.stage/
   //       ├── payload/
@@ -374,9 +396,6 @@ export async function prepareMedia(gameDir, reportPath, engine) {
   // so we filter the report accordingly
   console.log("Preparing media files based on the report...");
   // 1. If the file is audio-only, use `audio_only` regardless of its extension.
-  const audioFilesToPrepare = mediaScan.audioOnlyFiles.filter(
-    (fileReport) => fileReport.verdict !== VERDICTS.audio_only.verdict,
-  );
 
   // 2.If the playback route is native or belongs to another engine, use
   // `out_of_scope_engine`; do not make this NW.js tool rewrite it.
@@ -420,9 +439,7 @@ export async function prepareMedia(gameDir, reportPath, engine) {
   return {
     stageDir,
     payloadDir,
-    mappingPath,
-    preparationReportPath,
-    preparedFiles,
+    ...processResult,
   };
 
   // now we can safely:
