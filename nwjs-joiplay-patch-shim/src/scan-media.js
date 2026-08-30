@@ -248,6 +248,7 @@ async function scanForVideoFiles(tree, engine) {
 
         hasH264Mp4AlternativeDeclared: hasH264Mp4AlternativeDeclared,
         h264Mp4AlternativeExists: h264Mp4AlternativeExists,
+        h264Mp4AlternativeArchivePath: "_",
 
         contentHash: null, // not needed for now, but could be useful for future deduplication or integrity checks
         evidenceLevel: "ffproble",

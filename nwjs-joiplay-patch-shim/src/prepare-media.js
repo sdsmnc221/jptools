@@ -9,7 +9,7 @@ import { existsSync, readFileSync, createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { link, lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "@derhuerst/ffprobe-static";
 
@@ -299,6 +299,25 @@ async function transcodeVideo(inputPath, outputPath) {
   });
 }
 
+function createMediaMapping(
+  transcodedFiles,
+  videoFilesWithShippedAlternatives,
+) {
+  const entries = [];
+
+  for (const file of transcodedFiles) {
+    entries.push([file.sourceArchivePath, file.targetArchivePath]);
+  }
+
+  for (const file of videoFilesWithShippedAlternatives) {
+    entries.push([file.sourceArchivePath, file.h264Mp4AlternativeArchivePath]);
+  }
+
+  entries.sort(([left], [right]) => left.localeCompare(right));
+
+  return Object.fromEntries(entries);
+}
+
 async function publishWithoutOverwrite(
   temporaryOutput,
   destination,
@@ -356,6 +375,33 @@ async function publishWithoutOverwrite(
     reused: true,
     outputHash: existingHash,
   };
+}
+
+async function publishTextFile({ content, destination, stageDir }) {
+  const temporaryDir = await mkdtemp(path.join(stageDir, ".tmp", "metadata-"));
+
+  try {
+    const temporaryFile = path.join(temporaryDir, "content.json");
+
+    await writeFile(temporaryFile, content, "utf8");
+
+    const contentHash = await hashFile(temporaryFile);
+
+    await mkdir(path.dirname(destination), {
+      recursive: true,
+    });
+
+    return await publishWithoutOverwrite(
+      temporaryFile,
+      destination,
+      contentHash,
+    );
+  } finally {
+    await rm(temporaryDir, {
+      recursive: true,
+      force: true,
+    });
+  }
 }
 
 async function processMediaFiles(
@@ -545,15 +591,53 @@ export async function prepareMedia(gameDir, reportPath) {
     videoFilesToTranscode,
   );
 
-  return {
-    stageDir,
-    payloadDir,
-    ...processResult,
-  };
-
   // now we can safely:
   //   1. Hash the output.
   //   2. Publish it into the staging payload.
   //   3. Add its source/target entry to rg-media-map.json.
   //   4. Record the probe results in preparation-report.json.
+
+  const mediaMapping = createMediaMapping(
+    processResult.transcodedFiles,
+    videoFilesWithShippedAlternatives,
+  );
+
+  const mappingPath = path.join(payloadDir, "rg-media-map.json");
+  const mappingContent = JSON.stringify(mediaMapping, null, 2) + "\n";
+  const mappingPublication = await publishTextFile({
+    content: mappingContent,
+    destination: mappingPath,
+    stageDir,
+  });
+  console.log(`Media mapping published to ${mappingPublication.destination}`);
+
+  const preparationReport = {
+    version: 1,
+    gameDir: resolvedGameDir,
+    sourceReportPath: path.resolve(reportPath),
+    mappingFile: "rg-media-map.json",
+    mediaMapping,
+    files: processResult.transcodedFiles,
+  };
+  const preparationReportPath = path.join(stageDir, "preparation-report.json");
+  const reportPublication = await publishTextFile({
+    content: JSON.stringify(preparationReport, null, 2) + "\n",
+    destination: preparationReportPath,
+    stageDir,
+  });
+
+  console.log(
+    `Preparation report published to ${reportPublication.destination}`,
+  );
+
+  return {
+    stageDir,
+    payloadDir,
+    mappingPath,
+    preparationReportPath,
+    mediaMapping,
+    preparedFiles: processResult.transcodedFiles,
+    mappingReused: mappingPublication.reused,
+    reportReused: reportPublication.reused,
+  };
 }
