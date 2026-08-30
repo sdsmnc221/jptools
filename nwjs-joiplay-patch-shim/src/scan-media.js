@@ -60,10 +60,15 @@ export const VERDICTS = {
   },
 };
 
+const actionableVerdicts = new Set([
+  VERDICTS.use_shipped_alternative.verdict,
+  VERDICTS.prepare_compatibility_override.verdict,
+]);
+
 function determineVerdict(probeResult, engine) {
   const {
-    probe,
-    format,
+    isVideo,
+    isAudioOnly,
     hasH264Mp4AlternativeDeclared,
     h264Mp4AlternativeExists,
   } = probeResult;
@@ -72,16 +77,14 @@ function determineVerdict(probeResult, engine) {
     return VERDICTS.out_of_scope_engine;
   }
 
-  if (probe.codec_type === "audio") {
+  if (isAudioOnly) {
     return VERDICTS.audio_only;
   }
 
-  if (probe.codec_type === "video") {
-    if (hasH264Mp4AlternativeDeclared && h264Mp4AlternativeExists) {
-      return VERDICTS.use_shipped_alternative;
-    } else {
-      return VERDICTS.prepare_compatibility_override;
-    }
+  if (isVideo) {
+    return hasH264Mp4AlternativeDeclared && h264Mp4AlternativeExists
+      ? VERDICTS.use_shipped_alternative
+      : VERDICTS.prepare_compatibility_override;
   }
 
   return VERDICTS.pass_through;
@@ -114,17 +117,21 @@ async function probeVideoStream(filePath) {
   }
 
   const parsed = JSON.parse(stdout);
-  const stream = parsed.streams?.[0];
-  const format = parsed.format;
 
-  const isVideo = stream.codec_type === "video";
-  const isAudio = stream.codec_type === "audio";
+  const videoStream = parsed.streams?.find(
+    (stream) => stream.codec_type === "video",
+  );
+
+  const audioStream = parsed.streams?.find(
+    (stream) => stream.codec_type === "audio",
+  );
 
   return {
-    isVideo,
-    isAudio,
-    probe: stream,
-    format,
+    isVideo: Boolean(videoStream),
+    isAudioOnly: !videoStream && Boolean(audioStream),
+    videoStream,
+    audioStream,
+    format: parsed.format,
   };
 }
 
@@ -186,7 +193,7 @@ async function scanForVideoFiles(tree, engine) {
   console.log(
     `Found ${mediaCandidates.length} media candidates in ${tree.root}`,
   );
-  console.log(`Probing each candidate with ffprobe...`);
+  console.log(`Probing each candidate with ff..`);
   // run `ffprobe -select_streams v:0` before calling anything video.
   // A `.webm` with only Vorbis or Opus is audio and must leave the
   // report as `audio_only`, not `risky`.
@@ -195,7 +202,8 @@ async function scanForVideoFiles(tree, engine) {
     try {
       const probeResult = await probeVideoStream(fullPath);
 
-      const { isVideo, isAudio, probe, format } = probeResult;
+      const { isVideo, isAudioOnly, videoStream, audioStream, format } =
+        probeResult;
 
       let hasH264Mp4AlternativeDeclared = false;
       let h264Mp4AlternativeExists = false;
@@ -218,15 +226,23 @@ async function scanForVideoFiles(tree, engine) {
         file,
         byteSize: format.size,
 
-        ...(probe.videoCodec ? { videoCodec: probe.videoCodec } : {}),
-        ...(probe.codec_name ? { codec_name: probe.codec_name } : {}),
-        ...(probe.audioCodec ? { audioCodec: probe.audioCodec } : {}),
-        ...(probe.profile ? { profile: probe.profile } : {}),
-        ...(probe.width ? { width: probe.width } : {}),
-        ...(probe.height ? { height: probe.height } : {}),
-        ...(probe.pix_fmt ? { pix_fmt: probe.pix_fmt } : {}),
-        ...(probe.level ? { level: probe.level } : {}),
-        ...(probe.r_frame_rate ? { r_frame_rate: probe.r_frame_rate } : {}),
+        ...(videoStream?.codec_name
+          ? { videoCodec: videoStream.codec_name }
+          : {}),
+        ...(videoStream?.codec_name
+          ? { codec_name: videoStream.codec_name }
+          : {}),
+        ...(audioStream?.codec_name
+          ? { audioCodec: audioStream.codec_name }
+          : {}),
+        ...(videoStream?.profile ? { profile: videoStream.profile } : {}),
+        ...(videoStream?.width ? { width: videoStream.width } : {}),
+        ...(videoStream?.height ? { height: videoStream.height } : {}),
+        ...(videoStream?.pix_fmt ? { pix_fmt: videoStream.pix_fmt } : {}),
+        ...(videoStream?.level ? { level: videoStream.level } : {}),
+        ...(videoStream?.r_frame_rate
+          ? { r_frame_rate: videoStream.r_frame_rate }
+          : {}),
 
         duration: format.duration ?? null,
 
@@ -234,7 +250,7 @@ async function scanForVideoFiles(tree, engine) {
         h264Mp4AlternativeExists: h264Mp4AlternativeExists,
 
         contentHash: null, // not needed for now, but could be useful for future deduplication or integrity checks
-        evidenceLevel: probe.evidenceLevel,
+        evidenceLevel: "ffproble",
         verdict: verdict.verdict,
         recommendedAction: verdict.recommendedAction,
         reason: verdict.reason,
@@ -242,7 +258,7 @@ async function scanForVideoFiles(tree, engine) {
       };
       if (isVideo) {
         report.videoFiles.push(record);
-      } else if (isAudio) {
+      } else if (isAudioOnly) {
         report.audioOnlyFiles.push(record);
       }
     } catch (error) {
@@ -307,9 +323,10 @@ export async function scanMedia(gameDir) {
         new GameTree(unpackedDir),
         detectionResult.engine,
       );
-      report.result = Object.values(report.mediaScan)
-        .flat()
-        .filter((result) => result.verdict !== VERDICTS.pass_through.verdict);
+
+      report.result = report.mediaScan.videoFiles.filter((record) =>
+        actionableVerdicts.has(record.verdict),
+      );
 
       report.verdict =
         report.result.length > 0
