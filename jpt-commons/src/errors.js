@@ -35,3 +35,15 @@ export class GameTreeError extends ShimError {
     super(message, 6);
   }
 }
+
+export class MediaScanError extends ShimError {
+  constructor(message) {
+    super(message, 7);
+  }
+}
+
+export class MediaPrepareError extends ShimError {
+  constructor(message) {
+    super(message, 8);
+  }
+}

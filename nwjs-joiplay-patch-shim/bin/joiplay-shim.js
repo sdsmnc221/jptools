@@ -9,8 +9,11 @@ import { detectGameEngine } from "../src/detect.js";
 import { installShimToGame } from "../src/install.js";
 import { verifyShim } from "../src/verify.js";
 import { removeShim } from "../src/remove.js";
-import { ShimError } from "jpt-commons/errors";
+import { scanMedia, VERDICTS } from "../src/scan-media.js";
+import { prepareMedia } from "../src/prepare-media.js";
+import { ShimError, MediaPrepareError } from "jpt-commons/errors";
 import { GameTree } from "jpt-commons/game-tree";
+import path from "path";
 
 const args = process.argv.slice(2);
 
@@ -23,6 +26,10 @@ const main = async () => {
   const [command, gameDir, ...options] = args;
 
   const isDryRun = options.includes("--dry-run");
+  const isForce = options.includes("--force");
+  const reportPathOptionIndex = options.indexOf("--report-path");
+  const reportPath =
+    reportPathOptionIndex !== -1 ? options[reportPathOptionIndex + 1] : null;
 
   let result;
 
@@ -39,6 +46,36 @@ const main = async () => {
       break;
     case "remove":
       result = await removeShim(gameDir, { dryRun: isDryRun });
+      break;
+    case "scan-media":
+      result = await scanMedia(gameDir);
+      console.log("Media scan result:", result.verdict);
+      if (result.verdict === VERDICTS.pass_through.verdict) {
+        console.log("No media files need to be prepared for this game.");
+        console.log(
+          "You may add the game to JoiPlay, apply patch if needed and hope it works",
+        );
+      } else {
+        console.log("Media files need to be prepared for this game.");
+        console.log(
+          `Run the command: joiplay-shim prepare-media "${path.resolve(gameDir)}" --report-path "${result.mediaScanPath}" to prepare media files for the game.`,
+        );
+      }
+      break;
+    case "prepare-media":
+      if (!reportPath) {
+        throw new MediaPrepareError(
+          "Missing --report-path option for prepare-media command.",
+        );
+      }
+      result = await prepareMedia(gameDir, reportPath, { force: isForce });
+      if (result.rgaPath) {
+        console.log(`RGA file prepared at: ${result.rgaPath}`);
+        console.log(
+          "You may add the game to JoiPlay, apply patch and hope it works",
+        );
+      }
+
       break;
     default:
       console.error(`Unknown command: ${command}`);

@@ -1,4 +1,8 @@
 packages:
-  - "jpt-commons"
-  - "nwjs-joiplay-patch-shim"
-  - "joiplay-rg-input"
+  - jpt-commons
+  - nwjs-joiplay-patch-shim
+  - joiplay-rg-input
+
+onlyBuiltDependencies:
+  - "@derhuerst/ffprobe-static"
+  - ffmpeg-static
