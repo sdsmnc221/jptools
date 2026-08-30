@@ -9,8 +9,7 @@ import { existsSync, readFileSync, createReadStream } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-
+import { link, lstat, mkdir, mkdtemp, rm } from "node:fs/promises";
 import ffmpegPath from "ffmpeg-static";
 import ffprobePath from "@derhuerst/ffprobe-static";
 
@@ -60,8 +59,18 @@ async function probeMedia(filePath) {
         "error",
         "-show_entries",
         [
-          "stream=index,codec_type,codec_name,profile,level,pix_fmt",
-          "width,height,avg_frame_rate,r_frame_rate",
+          [
+            "stream=index",
+            "codec_type",
+            "codec_name",
+            "profile",
+            "level",
+            "pix_fmt",
+            "width",
+            "height",
+            "avg_frame_rate",
+            "r_frame_rate",
+          ].join(","),
           "format=format_name,duration,size",
         ].join(":"),
         "-of",
@@ -101,7 +110,7 @@ async function probeMedia(filePath) {
   };
 }
 
-async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
+function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
   // After FFmpeg succeeds, run the bundled ffprobePath against temporaryOutput.
   //   Reject the output unless:
   //   file size > 0
@@ -117,6 +126,8 @@ async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
   const video = probe.videoStream;
   const audio = probe.audioStream;
   const byteSize = Number(probe.format.size ?? 0);
+  const formatName = String(probe.format.format_name ?? "");
+  const formatNames = formatName.split(",");
 
   if (byteSize <= 0) {
     errors.push("Output is empty");
@@ -131,10 +142,29 @@ async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
     if (video.pix_fmt !== "yuv420p") {
       errors.push(`Video pixel format is not yuv420p (found ${video.pix_fmt})`);
     }
-    if (Number(video.width) > 1280 || Number(video.height) > 720) {
+
+    if (video.profile !== "Main") {
+      errors.push(`Video profile is ${video.profile}, expected Main`);
+    }
+
+    if (Number(video.level) !== 31) {
+      errors.push(`Video level is ${video.level}, expected 31 (Level 3.1)`);
+    }
+
+    const width = Number(video.width);
+    const height = Number(video.height);
+
+    if (
+      !Number.isFinite(width) ||
+      !Number.isFinite(height) ||
+      width <= 0 ||
+      height <= 0
+    ) {
       errors.push(
-        `Video resolution exceeds 1280x720 (found ${video.width}x${video.height})`,
+        `Video dimensions are invalid (${video.width}x${video.height})`,
       );
+    } else if (width > 1280 || height > 720) {
+      errors.push(`Video resolution exceeds 1280x720 (${width}x${height})`);
     }
 
     const frameRate = parseFrameRate(
@@ -147,6 +177,10 @@ async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
         `Video frame rate exceeds 30 fps (found ${frameRate.toFixed(2)} fps)`,
       );
     }
+  }
+
+  if (!formatNames.includes("mp4")) {
+    errors.push(`Output container is not MP4 (${probe.format.format_name})`);
   }
 
   if (sourceHadAudio && !audio) {
@@ -169,7 +203,7 @@ async function validateTemporaryOutput(probe, { sourceHadAudio } = {}) {
     width: Number(video.width),
     height: Number(video.height),
     frameRate: parseFrameRate(video.avg_frame_rate || video.r_frame_rate),
-    formatName: probe.format.format_name,
+    formatName,
   };
 }
 
@@ -265,7 +299,66 @@ async function transcodeVideo(inputPath, outputPath) {
   });
 }
 
-export async function processMediaFiles(
+async function publishWithoutOverwrite(
+  temporaryOutput,
+  destination,
+  expectedHash,
+) {
+  try {
+    // Atomic and refuses to replace an existing path.
+    await link(temporaryOutput, destination);
+
+    return {
+      destination,
+      reused: false,
+      outputHash: expectedHash,
+    };
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw new MediaPrepareError(
+        `Failed to publish ${destination}: ${error.message}`,
+      );
+    }
+  }
+
+  let destinationStat;
+
+  try {
+    destinationStat = await lstat(destination);
+  } catch (error) {
+    throw new MediaPrepareError(
+      `Could not inspect existing destination ${destination}: ${error.message}`,
+    );
+  }
+
+  if (destinationStat.isSymbolicLink()) {
+    throw new MediaPrepareError(
+      `Refusing to reuse symbolic link: ${destination}`,
+    );
+  }
+
+  if (!destinationStat.isFile()) {
+    throw new MediaPrepareError(
+      `Prepared destination is not a regular file: ${destination}`,
+    );
+  }
+
+  const existingHash = await hashFile(destination);
+
+  if (existingHash !== expectedHash) {
+    throw new MediaPrepareError(
+      `Prepared destination already exists with different content: ${destination}`,
+    );
+  }
+
+  return {
+    destination,
+    reused: true,
+    outputHash: existingHash,
+  };
+}
+
+async function processMediaFiles(
   inputTree,
   stageDir,
   payloadDir,
@@ -332,7 +425,11 @@ export async function processMediaFiles(
         recursive: true,
       });
 
-      await publishWithoutOverwrite(temporaryOutput, destination, outputHash);
+      const publication = await publishWithoutOverwrite(
+        temporaryOutput,
+        destination,
+        outputHash,
+      );
 
       transcodedFiles.push({
         sourceArchivePath: fileReport.archivePath,
@@ -344,6 +441,7 @@ export async function processMediaFiles(
         outputProbe,
         validation,
         ffmpegArguments: transcodingResult.ffmpegArgs,
+        reused: publication.reused,
       });
     } catch (error) {
       throw new MediaPrepareError(
