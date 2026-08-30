@@ -9,6 +9,7 @@ import { detectGameEngine } from "../src/detect.js";
 import { installShimToGame } from "../src/install.js";
 import { verifyShim } from "../src/verify.js";
 import { removeShim } from "../src/remove.js";
+import { scanMedia } from "../src/scan-media.js";
 import { ShimError } from "jpt-commons/errors";
 import { GameTree } from "jpt-commons/game-tree";
 
@@ -39,6 +40,10 @@ const main = async () => {
       break;
     case "remove":
       result = await removeShim(gameDir, { dryRun: isDryRun });
+      break;
+    case "scan-media":
+      result = await scanMedia(gameDir);
+      console.log("Media scan result:", result);
       break;
     default:
       console.error(`Unknown command: ${command}`);
