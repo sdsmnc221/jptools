@@ -1,3 +1,4 @@
+import { KNOWN_ENGINES } from "jpt-commons/utils/constants";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -93,7 +94,10 @@ function createHarness(createBitmap) {
     },
   };
 
-  vm.runInNewContext(template.replaceAll("{{ENGINE}}", "construct"), context);
+  vm.runInNewContext(
+    template.replaceAll("{{ENGINE}}", KNOWN_ENGINES.CONSTRUCT),
+    context,
+  );
   return { context, document, messages, bitmapSources };
 }
 

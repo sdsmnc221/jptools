@@ -169,10 +169,13 @@ const diagnosticsForVideo = () => {
     videoStates.set(video, state);
     log("video-created", snapshot(video, state));
     if (bitmapPolling.rvfcWasAvailable) {
-      log(bitmapPolling.rvfcDisabled ? "rvfc-disabled" : "rvfc-disable-failed", {
-        id: state.id,
-        error: bitmapPolling.error,
-      });
+      log(
+        bitmapPolling.rvfcDisabled ? "rvfc-disabled" : "rvfc-disable-failed",
+        {
+          id: state.id,
+          error: bitmapPolling.error,
+        },
+      );
     }
 
     [
@@ -343,13 +346,13 @@ const diagnosticsForVideo = () => {
 };
 
 const runner = (engine) => {
-  if (engine === "rpgmmz") {
+  if (engine === KNOWN_ENGINES.MZ) {
     patchProcess();
     document.addEventListener("DOMContentLoaded", patchProcess);
     window.addEventListener("load", patchProcess);
   }
 
-  if (engine === "construct") {
+  if (engine === KNOWN_ENGINES.CONSTRUCT) {
     try {
       diagnosticsForVideo();
     } catch (error) {

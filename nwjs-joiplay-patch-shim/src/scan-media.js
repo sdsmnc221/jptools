@@ -11,7 +11,7 @@ import path from "node:path";
 import { existsSync, readFileSync } from "node:fs";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { MEDIA_EXTENSIONS } from "jpt-commons/utils/constants";
+import { MEDIA_EXTENSIONS, KNOWN_ENGINES } from "jpt-commons/utils/constants";
 
 // | Verdict | Meaning |
 // | --- | --- |
@@ -66,7 +66,7 @@ function determineVerdict(probeResult, engine) {
     h264Mp4AlternativeExists,
   } = probeResult;
 
-  if (engine !== "construct") {
+  if (engine !== KNOWN_ENGINES.CONSTRUCT) {
     return VERDICTS.out_of_scope_engine;
   }
 
