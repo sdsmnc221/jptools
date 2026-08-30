@@ -90,8 +90,6 @@ JoiPlay _applies patch_ for NW.js game by unzupping an `.rga` over the game fold
 
 ## Construct worker/ImageBitmap bridge producing sound and not visual videos
 
-![NW.js decoding vieo with no visual only audio](./docs/CleanShot%202026-08-29%20at%2014.59.10@2x.png)
-
 1. Construct is hosted in a worker.
 2. The video element lives on the DOM side.
 3. Construct must transfer frames with `requestVideoFrameCallback` and/or `createImageBitmap(video)`.
