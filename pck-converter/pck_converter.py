@@ -1,9 +1,12 @@
+#!/usr/bin/env python3
 import hashlib
 import struct
 import os
 import argparse
 from pathlib import Path
 import sys
+
+__version__ = "0.1.0"
 
 PACK_MAGIC = b"GDPC"
 # An embedded pack ends with [u64 size]["GDPC"].
@@ -297,7 +300,10 @@ def extract(exe_path: str | Path, output_path: str | Path | None = None, force: 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pck-converter",
-        description="Inspect Godot executables for embedded PCK data.",
+        description="Inspect Godot executables for embedded PCK data.\n" \
+        "Writes to <game>_patch/ beside the game; never modifies the original.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="example: pck-converter extract /path/to/Game/My_awesome_game_that_I_own.exe"
     )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -306,21 +312,23 @@ def build_parser() -> argparse.ArgumentParser:
         "scan",
         help="list .exe files in a game directory",
     )
-    scan.add_argument("game_dir", type=Path)
+    scan.add_argument("game_dir", type=Path, metavar="GAME_DIR")
 
     detect = subparsers.add_parser(
         "detect",
         help="read the embedded Godot pack header from an executable",
     )
-    detect.add_argument("exe", type=Path)
+    detect.add_argument("exe", type=Path, metavar="YourOwnGame.exe")
 
     extract = subparsers.add_parser(
         "extract",
         help="extract the embedded Godot pack from an executable",
     )
-    extract.add_argument("exe", type=Path)
-    extract.add_argument("output", type=Path, nargs="?", default=None)
+    extract.add_argument("exe", type=Path, metavar="YourOwnGame.exe")
+    extract.add_argument("output", type=Path, nargs="?", default=None, metavar="OUTPUT.pck")
     extract.add_argument("--force", action="store_true")
+
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
 
     return parser
 
