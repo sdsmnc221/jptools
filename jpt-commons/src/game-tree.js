@@ -5,14 +5,14 @@ import { GameTreeError } from "jpt-commons/errors";
 import { rmSync } from "node:fs";
 import AdmZip from "adm-zip";
 import { MEDIA_EXTENSIONS } from "./utils/constants.js";
+import { Finder } from "./finder.js";
 
-const skipAppleDouble = (files) =>
-  files.filter((filename) => !filename.startsWith("._"));
 export class GameTree {
   constructor(root) {
     this.root = path.resolve(root);
     this.gameName = path.basename(this.root);
     this.admZip = AdmZip;
+    this.finder = new Finder(this.root);
   }
 
   resolve(relativePath) {
@@ -67,26 +67,16 @@ export class GameTree {
   async directChildren(dir = this.root) {
     const out = [];
     for (const entry of await readdir(dir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
+      if (entry.isDirectory() && !entry.name.startsWith("._")) {
         out.push(entry.name);
       }
     }
 
     if (out.length === 0) {
-      throw new GameTreeError(
-        `No direct child directories found in ${this.root}`,
-      );
+      console.log(`No direct child directories  found in ${this.root}`);
     }
 
     return out.sort();
-  }
-
-  async fileExists(filename, dir = this.root) {
-    const originalFiles = await readdir(dir, { recursive: true });
-    const files = skipAppleDouble(originalFiles);
-    return files.some((file) =>
-      file.toLowerCase().includes(filename.toLowerCase()),
-    );
   }
 
   // FIXED: Ask where is the game content, rather than ask where is the exe

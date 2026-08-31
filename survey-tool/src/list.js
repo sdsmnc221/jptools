@@ -39,63 +39,50 @@ const cheapDetection = async (gameDir) => {
     metadata: null,
   };
 
-  for (const entry of await readdir(gameDir, { withFileTypes: true })) {
-    // Unreal detection logic
-    const engineDir = path.join(gameDir, "Engine");
-    if (existsSync(engineDir)) {
-      result.evidences.push("Engine directory exists");
+  // Gather evidences
+  const { files, dirs } = await gameDirTree.finder.rootIndex();
+  // Unreal detection logic
+  if (dirs.has("engine")) {
+    result.evidences.push("Engine directory exists");
+  }
+  // exist sync of *-Shipping.exe inside folder or sub-folders
+  if (await gameDirTree.finder.fileNameMatches(/-Shipping\.exe$/)) {
+    result.evidences.push("Found -Shipping.exe");
+  }
 
-      // exist sync of *-Shipping.exe inside folder or sub-folders
-      if (await gameDirTree.fileExists("-Shipping.exe")) {
-        result.evidences.push("Found -Shipping.exe in Content/Paks");
-      }
-      break;
-    }
+  // Unity detection logic
+  if (files.has("unityplayer.dll")) {
+    result.evidences.push("Found UnityPlayer.dll");
+  }
+  if ([...dirs].some((d) => d.endsWith("_data"))) {
+    result.evidences.push("Found *_Data directory");
+  }
 
-    // Unity detection logic
-    const unityPlayerDll = await gameDirTree.fileExists("UnityPlayer.dll");
-    if (unityPlayerDll) {
-      result.evidences.push("Found UnityPlayer.dll");
-    }
-    const dataDir = await gameDirTree.fileExists("_Data");
-    if (dataDir) {
-      result.evidences.push("Found *_Data directory");
-    }
+  // GameMaker detection logic
+  if (files.has("data.win")) {
+    result.evidences.push("Found data.win");
+  }
 
-    // GameMaker detection logic
-    const dataWin = await gameDirTree.fileExists("data.win");
-    if (dataWin) {
-      result.evidences.push("Found data.win");
-    }
+  // RPG Maker detection logic
+  if ([...files].some((f) => /^rgss.*\.dll$/.test(f))) {
+    result.evidences.push("Found RGSS*.dll");
+  }
 
-    // RPG Maker detection logic
-    const rgssDll = await gameDirTree.fileExists("RGSS");
-    if (rgssDll) {
-      result.evidences.push("Found RGSS*.dll");
-    }
+  // Godot detection logic
+  // TODO
 
-    // Godot detection logic
-    // TODO
-
-    // NW.js detection logic
-    const nwDll = await gameDirTree.fileExists("nw.dll");
-    if (nwDll) {
-      result.evidences.push("Found nw.dll");
-    }
-    const packageNw = await gameDirTree.fileExists("package.nw");
-    if (packageNw) {
-      result.evidences.push("Found package.nw");
-    }
-    const indexHtml = await gameDirTree.fileExists("index.html");
-    if (indexHtml) {
-      result.evidences.push("Found index.html");
-    }
-    const packageJson = await gameDirTree.fileExists("package.json");
-    if (packageJson) {
-      result.evidences.push("Found package.json");
-    }
-
-    break;
+  // NW.js detection logic
+  if (files.has("nw.dll")) {
+    result.evidences.push("Found nw.dll");
+  }
+  if (files.has("package.nw")) {
+    result.evidences.push("Found package.nw");
+  }
+  if (files.has("index.html")) {
+    result.evidences.push("Found index.html");
+  }
+  if (files.has("package.json")) {
+    result.evidences.push("Found package.json");
   }
 
   if (result.evidences.length > 0) {
