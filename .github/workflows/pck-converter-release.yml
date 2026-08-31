@@ -53,7 +53,7 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          archive="pck-converter-${{ github.ref_name }}-${{ matrix.name }}.tar.gz"
+          archive="${{ github.ref_name }}-${{ matrix.name }}.tar.gz"
 
           mkdir -p package
           cp "dist/pck-converter" "package/pck-converter"
@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $archive = "pck-converter-${{ github.ref_name }}-${{ matrix.name }}.zip"
+          $archive = "${{ github.ref_name }}-${{ matrix.name }}.zip"
 
           New-Item -ItemType Directory -Force package | Out-Null
           Copy-Item "dist/pck-converter.exe" "package/pck-converter.exe"
