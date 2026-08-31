@@ -6,6 +6,8 @@ import { rmSync } from "node:fs";
 import AdmZip from "adm-zip";
 import { MEDIA_EXTENSIONS } from "./utils/constants.js";
 
+const skipAppleDouble = (files) =>
+  files.filter((filename) => !filename.startsWith("._"));
 export class GameTree {
   constructor(root) {
     this.root = path.resolve(root);
@@ -43,23 +45,48 @@ export class GameTree {
     return await readFile(this.resolve(relativePath));
   }
 
+  async walk(dir) {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        await this.walk(fullPath);
+      } else if (entry.isFile()) {
+        out.push(path.relative(this.root, fullPath));
+      }
+    }
+  }
+
   async files() {
     const out = [];
 
-    const walk = async (dir) => {
-      for (const entry of await readdir(dir, { withFileTypes: true })) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isSymbolicLink()) continue;
-        if (entry.isDirectory()) {
-          await walk(fullPath);
-        } else if (entry.isFile()) {
-          out.push(path.relative(this.root, fullPath));
-        }
-      }
-    };
-
-    await walk(this.root);
+    await this.walk(this.root);
     return out.sort();
+  }
+
+  async directChildren(dir = this.root) {
+    const out = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        out.push(entry.name);
+      }
+    }
+
+    if (out.length === 0) {
+      throw new GameTreeError(
+        `No direct child directories found in ${this.root}`,
+      );
+    }
+
+    return out.sort();
+  }
+
+  async fileExists(filename, dir = this.root) {
+    const originalFiles = await readdir(dir, { recursive: true });
+    const files = skipAppleDouble(originalFiles);
+    return files.some((file) =>
+      file.toLowerCase().includes(filename.toLowerCase()),
+    );
   }
 
   // FIXED: Ask where is the game content, rather than ask where is the exe

@@ -2,6 +2,7 @@ packages:
   - jpt-commons
   - nwjs-joiplay-patch-shim
   - joiplay-rg-input
+  - survey-tool
 
 onlyBuiltDependencies:
   - "@derhuerst/ffprobe-static"
