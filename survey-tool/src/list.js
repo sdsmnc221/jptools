@@ -46,8 +46,22 @@ const cheapDetection = async (gameDir) => {
     result.evidences.push("Engine directory exists");
   }
   // exist sync of *-Shipping.exe inside folder or sub-folders
-  if (await gameDirTree.finder.fileNameMatches(/-Shipping\.exe$/)) {
-    result.evidences.push("Found -Shipping.exe");
+  //   for each top-level directory d:
+  //     <d>/Binaries/<platform>/*-Shipping.exe exists  ->  d IS the project
+  const topLevelDirectories = await gameDirTree.directChildren();
+  if (topLevelDirectories.length > 0) {
+    for (const dir of topLevelDirectories) {
+      const binariesDir = path.join(gameDir, dir, "Binaries");
+      if (!existsSync(binariesDir)) continue;
+
+      const shippingExeExists = await gameDirTree.finder.fileNameMatches(
+        /-Shipping\.exe$/,
+        binariesDir,
+      );
+      if (shippingExeExists) {
+        result.evidences.push(`Found -Shipping.exe in ${dir}`);
+      }
+    }
   }
 
   // Unity detection logic
