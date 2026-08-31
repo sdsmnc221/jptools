@@ -1,3 +1,6 @@
+[RELEASES](https://github.com/sdsmnc221/jptools/releases)
+
+
 ```text
 joiplay.tools/
     pnpm-workspace.yaml
