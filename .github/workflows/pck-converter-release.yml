@@ -83,7 +83,8 @@ jobs:
         with:
           name: pck-converter-${{ matrix.name }}
           path: |
-            pck-converter-${{ github.ref_name }}-${{ matrix.name }}.*
+            ${{ github.ref_name }}-${{ matrix.name }}.*
+          if-no-files-found: error
   release:
     name: Publish release
     needs: build
