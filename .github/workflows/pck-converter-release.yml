@@ -1,0 +1,102 @@
+name: Build pck-converter
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            name: macos-arm64
+            ext: ""
+            archive: tar.gz
+          - os: ubuntu-latest
+            name: linux-x86_64
+            ext: ""
+            archive: tar.gz
+          - os: windows-latest
+            name: windows-x86_64
+            ext: ".exe"
+            archive: zip
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller
+
+      - name: Build binary
+        run: python -m PyInstaller --onefile --name pck-converter pck-converter/pck_converter.py
+
+      - name: Smoke test binary
+        run: ./dist/pck-converter${{ matrix.ext }} --version
+        shell: bash
+
+      - name: Package Unix archive
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          archive="pck-converter-${{ github.ref_name }}-${{ matrix.name }}.tar.gz"
+
+          mkdir -p package
+          cp "dist/pck-converter" "package/pck-converter"
+          cp "pck-converter/README.md" "package/README.md"
+          cp "pck-converter/License.md" "package/License.md"
+
+          tar -czf "$archive" -C package .
+          shasum -a 256 "$archive" > "$archive.sha256"
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = "pck-converter-${{ github.ref_name }}-${{ matrix.name }}.zip"
+
+          New-Item -ItemType Directory -Force package | Out-Null
+          Copy-Item "dist/pck-converter.exe" "package/pck-converter.exe"
+          Copy-Item "pck-converter/README.md" "package/README.md"
+          Copy-Item "pck-converter/License.md" "package/License.md"
+
+          Compress-Archive -Path package/* -DestinationPath $archive -Force
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLower()
+          "$hash  $archive" | Out-File "$archive.sha256" -Encoding ascii
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pck-converter-${{ matrix.name }}
+          path: |
+            pck-converter-${{ github.ref_name }}-${{ matrix.name }}.*
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
