@@ -1,4 +1,3 @@
-import { readdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import { GameTree } from "jpt-commons/game-tree";
@@ -6,6 +5,11 @@ import {
   KNOWN_ENGINES,
   KNOWN_ENGINES_BRANDS,
 } from "jpt-commons/utils/constants";
+import { metadataRPGMaker } from "./metadata/rpgmaker.js";
+import {
+  RefinedDetectionResult,
+  Metadata,
+} from "./metadata/RefinedDetectionResult.js";
 
 const checkIfEvidenceExists = (evidences, keyword) => {
   return evidences.some((evidence) => evidence.includes(keyword));
@@ -22,12 +26,12 @@ const listGames = async (gamesDir) => {
   );
 
   for (const child of directChildren) {
-    detectionResults[child] = await cheapDetection(path.join(gamesDir, child));
+    detectionResults[child] = await coreDetection(path.join(gamesDir, child));
   }
   return detectionResults;
 };
 
-const cheapDetection = async (gameDir) => {
+const coreDetection = async (gameDir) => {
   // | # | Engine | Marker |
   // | --- | --- | --- |
   // | 5 | Godot | any `.pck` with a verified `GDPC` header, **or** an `.exe` with a pack glued on (milestone 5) |
@@ -79,7 +83,7 @@ const cheapDetection = async (gameDir) => {
 
   // RPG Maker detection logic
   if ([...files].some((f) => /^rgss.*\.dll$/.test(f))) {
-    result.evidences.push("Found RGSS*.dll");
+    result.evidences.push("Found rgss*.dll");
   }
 
   // Godot detection logic
@@ -105,7 +109,6 @@ const cheapDetection = async (gameDir) => {
       checkIfEvidenceExists(result.evidences, "-Shipping.exe")
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNREAL];
-      return result;
     }
 
     if (
@@ -113,17 +116,14 @@ const cheapDetection = async (gameDir) => {
       checkIfEvidenceExists(result.evidences, "*_Data")
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNITY];
-      return result;
     }
 
     if (checkIfEvidenceExists(result.evidences, "data.win")) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.GM];
-      return result;
     }
 
-    if (checkIfEvidenceExists(result.evidences, "RGSS*.dll")) {
+    if (checkIfEvidenceExists(result.evidences, "rgss*.dll")) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.RPGM];
-      return result;
     }
 
     if (
@@ -133,10 +133,81 @@ const cheapDetection = async (gameDir) => {
         checkIfEvidenceExists(result.evidences, "package.json"))
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS];
-      return result;
+    }
+  } else {
+    // not-a-game or unknown/custom engine
+    if ([...files].some((f) => f.endsWith(".exe"))) {
+      result.evidences.push("Found executable file");
+    }
+    if ([...files].some((f) => f.endsWith(".dll"))) {
+      result.evidences.push("Found DLL file");
+    }
+    if (files.has("SDL3.dll")) {
+      result.evidences.push("Found SDL3.dll");
+    }
+
+    if (result.evidences.length === 0) {
+      result.evidences.push("No significant evidence found");
+    } else {
+      result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.CUSTOM];
     }
   }
 
+  const { metadata, confidentGeneration, hasConflictingGeneration } =
+    await refinedDetection({ files, dirs, gameDirTree }, result.engine);
+
+  return { ...result, confidentGeneration, metadata, hasConflictingGeneration };
+};
+
+const refinedDetection = async (
+  { files, dirs, gameDirTree },
+  possibleEngine,
+) => {
+  let result = new RefinedDetectionResult();
+  switch (possibleEngine) {
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNREAL]:
+      // Add Unreal-specific metadata refinement here
+      break;
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNITY]:
+      // Add Unity-specific metadata refinement here
+      break;
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.GM]:
+      // Add GameMaker-specific metadata refinement here
+      break;
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.RPGM]:
+      result = await metadataRPGMaker(files, dirs, gameDirTree);
+      break;
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS]:
+      // Add NW.js-specific metadata refinement here
+      break;
+    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.CUSTOM]:
+      result = new RefinedDetectionResult(
+        [
+          new Metadata(null, null, {
+            engine: "custom",
+            reason: "Custom or unknown engine",
+            details: "Real game detected, but the engine is custom or unknown.",
+          }),
+        ],
+        null,
+        false,
+      );
+      break;
+    default:
+      result = new RefinedDetectionResult(
+        [
+          new Metadata(null, null, {
+            engine: "not-a-game",
+            reason: "Not a game",
+            details:
+              "No significant evidence of a known game engine was found.",
+          }),
+        ],
+        null,
+        false,
+      );
+      break;
+  }
   return result;
 };
 

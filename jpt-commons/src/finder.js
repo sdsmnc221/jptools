@@ -20,10 +20,31 @@ export class Finder {
       if (entry.isFile()) files.push(entry.name);
       if (entry.isDirectory()) dirs.push(entry.name);
     }
-    return {
+    this._rootIndex = {
       files: new Set(files.map((f) => f.toLowerCase())),
+      originalFiles: new Set(files),
       dirs: new Set(dirs.map((d) => d.toLowerCase())),
+      originalDirs: new Set(dirs),
     };
+
+    return this._rootIndex;
+  }
+
+  lookupOriginalByName(
+    name,
+    { rootIndexResult = this._rootIndex, file = true } = {},
+  ) {
+    if (!rootIndexResult) return null;
+    if (file) {
+      for (const f of rootIndexResult.originalFiles) {
+        if (f.toLowerCase() === name.toLowerCase()) return f;
+      }
+    } else {
+      for (const d of rootIndexResult.originalDirs) {
+        if (d.toLowerCase() === name.toLowerCase()) return d;
+      }
+    }
+    return null;
   }
 
   async findEntry(matcher, dir = this.root) {
