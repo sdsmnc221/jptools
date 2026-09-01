@@ -1,22 +1,30 @@
 # Pck Converter for JoiPlay
 
-A self-contained runtime shim that makes some Godot games exports, run under [JoiPlay](https://github.com/joiplay) under Android. _No game content is rewritten._
+Extracts the Godot `.pck` hidden inside a self-containerd Windows `.exe`, so [JoiPlay](https://joiplay.net/) can recognize the game.
+
+```bash
+python3 pck_converter.py extract "MyGame/MyGame.exe"
+```
+
+_writes MyGame_patch/MyGame.pck. Never modifies the original_
 
 > You **must** own your game.
 >
 > Backup your saves is a _should do_.
 
-_supports_:
+---
 
-- Godot 3/4 maybe
+## Requirements
+
+Python 3.10+. No dependencies.
+
+---
 
 ## Why?
 
-Some Godot games ship as one self-contained `.exe` with the game data glued onto the end. JoiPlay looks for a separate `.pck` file, finds none, and refuses to launch the game, with `this game type is not supported` prompt even though it is a Godot game that JoiPlay could route.
+JoiPlay detects a Godot game by looking for a `.pck` file in the folder. A self-contained `.exe` has the pack glued on the end, so JoiPlay sees nothing and the game will not import. Extracting it is not an optimization, it is the only way the game registers as Godot.
 
-This tool cuts the glued-on part off and saves it as a `.pck`, plus a stub `.exe` who acts as JoiPlay's entry point, in a sibling folder of the original game folder.
-
-This way, this tool don't alter your own game.
+---
 
 ## Get it to work
 
@@ -24,6 +32,13 @@ This way, this tool don't alter your own game.
 
 ```bash
  python3 pck_converter.py #  (...)
+```
+
+- Or you can use via provided shebang
+
+```bash
+chmod +x ./pck_converter.py
+./pck_converter.py -h
 ```
 
 ### Scan first
@@ -51,3 +66,17 @@ This way, this tool don't alter your own game.
 ```bash
  python3 pck_converter.py extract [game-dir/game.exe] # you must point to the executable
 ```
+
+---
+
+## Disclaimers
+
+```text
+These tools read files you already have and write only to a new <game>_patch/ folder beside the game. They never modify the game.
+
+This repository contains no game data - no data.win, no .pck, no APKs, no patch bytes. Every tool operates on your own copy of a game you own.
+
+Not affiliated with Godot Engine, or JoiPlay.
+```
+
+See [License](./License.md)
