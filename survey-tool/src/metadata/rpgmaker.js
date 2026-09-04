@@ -13,9 +13,32 @@ const rgssGenerationFromDll = (filename) => {
   };
 
   return {
-    rgss: filename,
+    filename,
     generation: generations[match[1]],
   };
+};
+
+const resolveGeneration = (metadatas) => {
+  // ini  >  dll  >  Data/  >  archive
+  // Game.ini's Library= line wins because that is literally the line
+  //  the launcher reads to choose a runtime;
+  // the on-disk DLL is second because it can be present
+  // without being used; the data markers are last
+  //  because they describe the assets, not the runtime.
+  let winningMetadata;
+  if ((winningMetadata = metadatas.find((m) => m.marker === "ini"))) {
+    return winningMetadata.generation;
+  }
+  if ((winningMetadata = metadatas.find((m) => m.marker === "dll"))) {
+    return winningMetadata.generation;
+  }
+  if ((winningMetadata = metadatas.find((m) => m.marker === "Data/"))) {
+    return winningMetadata.generation;
+  }
+  if ((winningMetadata = metadatas.find((m) => m.marker === "archive"))) {
+    return winningMetadata.generation;
+  }
+  return null;
 };
 
 const metadataRPGMaker = async (files, dirs, gameDirTree) => {
@@ -30,7 +53,7 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
   if (rgssDll) {
     metadata.push(
       new Metadata(rgssDll.generation, "dll", {
-        rgss: gameDirTree.finder.lookupOriginalByName(rgssDll.rgss, {
+        rgss: gameDirTree.finder.lookupOriginalByName(rgssDll.filename, {
           file: true,
         }),
       }),
@@ -88,12 +111,9 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
     metadata.push(new Metadata("VX Ace", "archive", { rgss: ".rgss3a" }));
   }
 
-  const hasConflictingGeneration = metadata.length
-    ? metadata.some((m) => m.generation !== metadata[0].generation)
-    : false;
-  const confidentGeneration = hasConflictingGeneration
-    ? null
-    : metadata[0]?.generation;
+  const gens = metadata.map((m) => m.generation);
+  const hasConflictingGeneration = !gens.every((v) => v === gens[0]);
+  const confidentGeneration = resolveGeneration(metadata);
 
   return new RefinedDetectionResult(
     metadata,
