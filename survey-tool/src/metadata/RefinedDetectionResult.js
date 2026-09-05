@@ -10,13 +10,15 @@ export class Metadata {
 }
 
 export class RefinedDetectionResult {
-  constructor(
+  constructor({
     metadata = [],
     confidentGeneration = null,
     hasConflictingGeneration = false,
-  ) {
+    reason = null,
+  } = {}) {
     this.metadata = metadata;
     this.confidentGeneration = confidentGeneration;
     this.hasConflictingGeneration = hasConflictingGeneration;
+    this.reason = reason;
   }
 }

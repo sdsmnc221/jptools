@@ -19,9 +19,7 @@ import {
 } from "./metadata/RefinedDetectionResult.js";
 
 const checkIfEvidenceExists = (evidences, keywords) => {
-  return evidences.some((evidence) =>
-    keywords.some((keyword) => evidence.includes(keyword)),
-  );
+  return keywords.some((keyword) => evidences.includes(keyword));
 };
 
 const listGames = async (gamesDir) => {
@@ -60,7 +58,7 @@ const coreDetection = async (gameDir) => {
   const { files, dirs } = await gameDirTree.finder.rootIndex();
   // Unreal detection logic
   if (dirs.has("engine")) {
-    result.evidences.push("Engine directory exists");
+    result.evidences.push(EVIDENCES.ENGINE_DIRECTORY);
   }
   // exist sync of *-Shipping.exe inside folder or sub-folders
   //   for each top-level directory d:
@@ -76,30 +74,30 @@ const coreDetection = async (gameDir) => {
         binariesDir,
       );
       if (shippingExeExists) {
-        result.evidences.push(`Found -Shipping.exe in ${dir}`);
+        result.evidences.push(EVIDENCES.SHIPPING_EXE);
       }
     }
   }
 
   // Unity detection logic
   if (files.has("unityplayer.dll")) {
-    result.evidences.push("Found UnityPlayer.dll");
+    result.evidences.push(EVIDENCES.UNITY_PLAYER_DLL);
   }
   if ([...dirs].some((d) => /_data$/i.test(d))) {
-    result.evidences.push("Found *_Data directory");
+    result.evidences.push(EVIDENCES.UNITY_DATA_DIRECTORY);
   }
 
   // GameMaker detection logic
   if (files.has("data.win")) {
-    result.evidences.push("Found data.win");
+    result.evidences.push(EVIDENCES.DATA_WIN);
   }
 
   // RPG Maker detection logic
   if ([...files].some((f) => RGSS_REGEXP.test(f))) {
-    result.evidences.push("Found rgss*.dll");
+    result.evidences.push(EVIDENCES.RGSS_DATA_FILES);
   }
   if (files.has("game.ini")) {
-    result.evidences.push("Found game.ini");
+    result.evidences.push(EVIDENCES.GAME_INI);
   }
   if ([...dirs].some((d) => d === "data")) {
     const dataDirTree = new GameTree(
@@ -117,7 +115,7 @@ const coreDetection = async (gameDir) => {
     }
   }
   if ([...files].some((f) => RGSS_ARCHIVE_REGEXP.test(f))) {
-    result.evidences.push("Found RPG Maker archive");
+    result.evidences.push(EVIDENCES.RPG_MAKER_ARCHIVE);
   }
 
   // Godot detection logic
@@ -125,19 +123,45 @@ const coreDetection = async (gameDir) => {
 
   // NW.js detection logic
   if (files.has("nw.dll")) {
-    result.evidences.push("Found nw.dll");
+    result.evidences.push(EVIDENCES.NW_DLL);
   }
   if (files.has("package.nw")) {
-    result.evidences.push("Found package.nw");
+    result.evidences.push(EVIDENCES.PACKAGE_NW);
   }
   if (files.has("index.html")) {
-    result.evidences.push("Found index.html");
+    result.evidences.push(EVIDENCES.INDEX_HTML);
   }
   if (files.has("package.json")) {
-    result.evidences.push("Found package.json");
+    result.evidences.push(EVIDENCES.PACKAGE_JSON);
   }
 
-  if (result.evidences.length > 0) {
+  // Custom/Unknown engine detection logic
+  if ([...files].some((f) => f.endsWith(".exe"))) {
+    result.evidences.push(EVIDENCES.EXE_FOUND);
+  }
+  if ([...files].some((f) => f.endsWith(".dll"))) {
+    result.evidences.push(EVIDENCES.DLL_FILE);
+  }
+  if (files.has("SDL3.dll")) {
+    result.evidences.push(EVIDENCES.SDL3_DLL);
+  }
+
+  // engine: null,  reason: "not-a-game"     no exe, no engine marker
+  // engine: null,  reason: "unsupported"    real game, unrecognised engine
+  // Decide "is this a game at all" independently of "did an engine match":
+  // always gather the generic evidence, then classify.
+  // engine matched, else any executable evidence means unsupported, else not-a-game.
+
+  if (result.evidences.length === 0) {
+    result.evidences.push(EVIDENCES.NOT_A_GAME);
+    result.engine = null;
+  } else {
+    if (
+      checkIfEvidenceExists(result.evidences, KNOWN_ENGINES_EVIDENCES.IS_A_GAME)
+    ) {
+      result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNSUPPORTED];
+    }
+
     if (
       checkIfEvidenceExists(
         result.evidences,
@@ -182,78 +206,80 @@ const coreDetection = async (gameDir) => {
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS];
     }
-  } else {
-    // not-a-game or unknown/custom engine
-    if ([...files].some((f) => f.endsWith(".exe"))) {
-      result.evidences.push("Found executable file");
-    }
-    if ([...files].some((f) => f.endsWith(".dll"))) {
-      result.evidences.push("Found DLL file");
-    }
-    if (files.has("SDL3.dll")) {
-      result.evidences.push("Found SDL3.dll");
-    }
-
-    if (result.evidences.length === 0) {
-      result.evidences.push("No significant evidence found");
-    } else {
-      result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.CUSTOM];
-    }
   }
 
-  const { metadata, confidentGeneration, hasConflictingGeneration } =
-    await refinedDetection({ files, dirs, gameDirTree }, result.engine);
+  result.reason = result.engine
+    ? EVIDENCES.ENGINE_DETECTED
+    : checkIfEvidenceExists(result.evidences, KNOWN_ENGINES_EVIDENCES.IS_A_GAME)
+      ? EVIDENCES.UNSUPPORTED
+      : EVIDENCES.NOT_A_GAME;
 
-  return { ...result, confidentGeneration, metadata, hasConflictingGeneration };
+  const { metadata, reason, confidentGeneration, hasConflictingGeneration } =
+    await refinedDetection(
+      { files, dirs, gameDirTree },
+      result.engine,
+      result.reason,
+    );
+
+  return {
+    ...result,
+    ...(reason ? { reason } : {}),
+    confidentGeneration,
+    metadata,
+    hasConflictingGeneration,
+  };
 };
 
 const refinedDetection = async (
   { files, dirs, gameDirTree },
   possibleEngine,
+  classificationReason,
 ) => {
-  let result = new RefinedDetectionResult();
-  switch (possibleEngine) {
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNREAL]:
-      // Add Unreal-specific metadata refinement here
-      break;
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNITY]:
-      // Add Unity-specific metadata refinement here
-      break;
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.GM]:
-      // Add GameMaker-specific metadata refinement here
-      break;
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.RPGM]:
-      result = await metadataRPGMaker(files, dirs, gameDirTree);
-      break;
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS]:
-      // Add NW.js-specific metadata refinement here
-      break;
-    case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.CUSTOM]:
-      result = new RefinedDetectionResult(
-        [
+  let result;
+  switch (classificationReason) {
+    case EVIDENCES.NOT_A_GAME:
+      return new RefinedDetectionResult({
+        metadata: [
           new Metadata(null, null, {
-            engine: "custom",
-            reason: "Custom or unknown engine",
-            details: "Real game detected, but the engine is custom or unknown.",
+            engine: possibleEngine,
+            reason: classificationReason,
           }),
         ],
-        null,
-        false,
-      );
-      break;
+        confidentGeneration: null,
+        hasConflictingGeneration: false,
+        reason: "No significant evidence of a known game engine was found.",
+      });
+    case EVIDENCES.UNSUPPORTED:
+      return new RefinedDetectionResult({
+        metadata: [
+          new Metadata(null, null, {
+            engine: possibleEngine,
+            reason: classificationReason,
+          }),
+        ],
+        confidentGeneration: null,
+        hasConflictingGeneration: false,
+        reason: "Unsupported game engine.",
+      });
     default:
-      result = new RefinedDetectionResult(
-        [
-          new Metadata(null, null, {
-            engine: "not-a-game",
-            reason: "Not a game",
-            details:
-              "No significant evidence of a known game engine was found.",
-          }),
-        ],
-        null,
-        false,
-      );
+      result = new RefinedDetectionResult();
+      switch (possibleEngine) {
+        case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNREAL]:
+          // Add Unreal-specific metadata refinement here
+          break;
+        case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNITY]:
+          // Add Unity-specific metadata refinement here
+          break;
+        case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.GM]:
+          // Add GameMaker-specific metadata refinement here
+          break;
+        case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.RPGM]:
+          return await metadataRPGMaker(files, dirs, gameDirTree);
+          break;
+        case KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS]:
+          // Add NW.js-specific metadata refinement here
+          break;
+      }
       break;
   }
   return result;

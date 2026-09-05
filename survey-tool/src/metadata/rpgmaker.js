@@ -122,11 +122,11 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
   const hasConflictingGeneration = !gens.every((v) => v === gens[0]);
   const confidentGeneration = resolveGeneration(metadata);
 
-  return new RefinedDetectionResult(
+  return new RefinedDetectionResult({
     metadata,
     confidentGeneration,
     hasConflictingGeneration,
-  );
+  });
 };
 
 export { metadataRPGMaker, RGSS_REGEXP, RGSS_ARCHIVE_REGEXP, RDATA_REGEXP };

@@ -18,6 +18,7 @@ export const KNOWN_ENGINES = {
   RPGM: "rpgmaker",
   NWJS: "nwjs",
   CUSTOM: "custom",
+  UNSUPPORTED: "unsupported",
 };
 
 export const KNOWN_ENGINES_BRANDS = {
@@ -30,6 +31,7 @@ export const KNOWN_ENGINES_BRANDS = {
   [KNOWN_ENGINES.RPGM]: "RPG Maker",
   [KNOWN_ENGINES.NWJS]: "NW.js family",
   [KNOWN_ENGINES.CUSTOM]: "Custom/Unknown Engine",
+  [KNOWN_ENGINES.UNSUPPORTED]: null,
 };
 
 // TODO: This is the third time this exact failure has appeared : evidence prose and the keyword list
@@ -38,18 +40,49 @@ export const KNOWN_ENGINES_BRANDS = {
 //   silently every time. Exporting the strings themselves as constants, pushed and matched from the
 //   same symbol — removes the whole class:
 export const EVIDENCES = {
+  ENGINE_DIRECTORY: "Engine directory exists",
+  SHIPPING_EXE: "*-Shipping.exe exists",
+  UNITY_PLAYER_DLL: "Found UnityPlayer.dll",
+  UNITY_DATA_DIRECTORY: "Found *_Data directory",
+  DATA_WIN: "Found data.win",
   RPGM_DATA_FILES: "RGSS Data Files",
+  RGSS_DATA_FILES: "Found RGSS Data Files",
+  RPG_MAKER_ARCHIVE: "Found RPG Maker archive",
+  GAME_INI: "Found game.ini",
+  DLL_FILE: "Found DLL file",
+  SDL3_DLL: "Found SDL3.dll",
+  NW_DLL: "Found nw.dll",
+  PACKAGE_NW: "Found package.nw",
+  INDEX_HTML: "Found index.html",
+  PACKAGE_JSON: "Found package.json",
+  EXE_FOUND: "Found executable file",
+  NOT_A_GAME: "No significant evidence found",
+  UNSUPPORTED: "Unsupported game engine",
+  ENGINE_DETECTED: "Engine detected",
 };
 export const KNOWN_ENGINES_EVIDENCES = {
-  [KNOWN_ENGINES.UNREAL]: ["Engine directory", "*-Shipping.exe"],
-  [KNOWN_ENGINES.UNITY]: ["UnityPlayer.dll", "*_Data"],
-  [KNOWN_ENGINES.GM]: ["data.win"],
-  [KNOWN_ENGINES.RPGM]: [
-    "rgss*.dll",
-    "game.ini",
-    EVIDENCES.RPGM_DATA_FILES,
-    "RPG Maker archive",
+  IS_A_GAME: [EVIDENCES.EXE_FOUND],
+  [KNOWN_ENGINES.UNREAL]: [EVIDENCES.ENGINE_DIRECTORY, EVIDENCES.SHIPPING_EXE],
+  [KNOWN_ENGINES.UNITY]: [
+    EVIDENCES.UNITY_PLAYER_DLL,
+    EVIDENCES.UNITY_DATA_DIRECTORY,
   ],
-  [KNOWN_ENGINES.NWJS]: ["nw.dll", "package.nw", "index.html", "package.json"],
-  [KNOWN_ENGINES.CUSTOM]: ["executable file", "DLL file", "SDL3.dll"],
+  [KNOWN_ENGINES.GM]: [EVIDENCES.DATA_WIN],
+  [KNOWN_ENGINES.RPGM]: [
+    EVIDENCES.RGSS_DATA_FILES,
+    EVIDENCES.GAME_INI,
+    EVIDENCES.RPGM_DATA_FILES,
+    EVIDENCES.RPG_MAKER_ARCHIVE,
+  ],
+  [KNOWN_ENGINES.NWJS]: [
+    EVIDENCES.NW_DLL,
+    EVIDENCES.PACKAGE_NW,
+    EVIDENCES.INDEX_HTML,
+    EVIDENCES.PACKAGE_JSON,
+  ],
+  [KNOWN_ENGINES.CUSTOM]: [
+    EVIDENCES.EXE_FOUND,
+    EVIDENCES.DLL_FILE,
+    EVIDENCES.SDL3_DLL,
+  ],
 };
