@@ -15,13 +15,22 @@ export class GameTree {
     this.finder = new Finder(this.root);
   }
 
-  resolve(relativePath) {
-    const resolved = path.resolve(this.root, relativePath);
-    if (resolved !== this.root && !resolved.startsWith(this.root)) {
+  resolve(inputPath = ".") {
+    const resolved = path.isAbsolute(inputPath)
+      ? path.resolve(inputPath)
+      : path.resolve(this.root, inputPath);
+
+    const relative = path.relative(this.root, resolved);
+    const insideRoot =
+      relative === "" ||
+      (!relative.startsWith("..") && !path.isAbsolute(relative));
+
+    if (!insideRoot) {
       throw new GameTreeError(
         `Resolved path ${resolved} is outside of root ${this.root}`,
       );
     }
+
     return resolved;
   }
 
@@ -46,34 +55,44 @@ export class GameTree {
   }
 
   async walk(dir) {
+    const out = [];
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const fullPath = path.join(dir, entry.name);
       if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
-        await this.walk(fullPath);
+        out.push(...(await this.walk(fullPath)));
       } else if (entry.isFile()) {
         out.push(path.relative(this.root, fullPath));
       }
     }
+    return out;
   }
 
   async files() {
-    const out = [];
-
-    await this.walk(this.root);
+    const out = await this.walk(this.root);
     return out.sort();
   }
 
-  async directChildren(dir = this.root) {
+  async directoryExists(relativePath = ".") {
+    try {
+      return (await stat(this.resolve(relativePath))).isDirectory();
+    } catch {
+      return false;
+    }
+  }
+
+  async directChildren(dir = ".") {
     const out = [];
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const resolvedDir = this.resolve(dir);
+
+    for (const entry of await readdir(resolvedDir, { withFileTypes: true })) {
       if (entry.isDirectory() && !entry.name.startsWith("._")) {
         out.push(entry.name);
       }
     }
 
     if (out.length === 0) {
-      console.log(`No direct child directories  found in ${this.root}`);
+      console.log(`No direct child directories found in ${resolvedDir}`);
     }
 
     return out.sort();

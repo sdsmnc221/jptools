@@ -2,8 +2,12 @@ import path from "path";
 import { GameTree } from "jpt-commons/game-tree";
 import { Metadata, RefinedDetectionResult } from "./RefinedDetectionResult.js";
 
+const RGSS_REGEXP = /^rgss([123])\d{2}[a-z]?\.dll$/;
+const RGSS_ARCHIVE_REGEXP = /\.rgss(?:ad|2a|3a)$/;
+const RDATA_REGEXP = /\.r(?:x|v)data(?:2)?$/;
+
 const rgssGenerationFromDll = (filename) => {
-  const match = /^rgss([123])\d{2}[a-z]?\.dll$/.exec(filename);
+  const match = RGSS_REGEXP.exec(filename);
   if (!match) return null;
 
   const generations = {
@@ -45,6 +49,9 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
   const metadata = [];
 
   await gameDirTree.finder.rootIndex();
+
+  //   rgss*.dll found  ->  engine = RPGM  ->  metadata runs  ->  fallbacks checked
+  //   no dll           ->  engine = null  ->  metadata never runs
 
   const rgssDll = [...files]
     .map((file) => rgssGenerationFromDll(file))
@@ -122,4 +129,4 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
   );
 };
 
-export { metadataRPGMaker };
+export { metadataRPGMaker, RGSS_REGEXP, RGSS_ARCHIVE_REGEXP, RDATA_REGEXP };

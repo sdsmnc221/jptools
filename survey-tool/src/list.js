@@ -4,19 +4,32 @@ import { GameTree } from "jpt-commons/game-tree";
 import {
   KNOWN_ENGINES,
   KNOWN_ENGINES_BRANDS,
+  KNOWN_ENGINES_EVIDENCES,
+  EVIDENCES,
 } from "jpt-commons/utils/constants";
-import { metadataRPGMaker } from "./metadata/rpgmaker.js";
+import {
+  metadataRPGMaker,
+  RGSS_REGEXP,
+  RGSS_ARCHIVE_REGEXP,
+  RDATA_REGEXP,
+} from "./metadata/rpgmaker.js";
 import {
   RefinedDetectionResult,
   Metadata,
 } from "./metadata/RefinedDetectionResult.js";
 
-const checkIfEvidenceExists = (evidences, keyword) => {
-  return evidences.some((evidence) => evidence.includes(keyword));
+const checkIfEvidenceExists = (evidences, keywords) => {
+  return evidences.some((evidence) =>
+    keywords.some((keyword) => evidence.includes(keyword)),
+  );
 };
 
 const listGames = async (gamesDir) => {
   const gamesTree = new GameTree(gamesDir);
+
+  if (!(await gamesTree.directoryExists("."))) {
+    throw new Error(`Games directory does not exist: ${gamesTree.root}`);
+  }
 
   let detectionResults = {};
   // Return the list of direct child directories
@@ -72,7 +85,7 @@ const coreDetection = async (gameDir) => {
   if (files.has("unityplayer.dll")) {
     result.evidences.push("Found UnityPlayer.dll");
   }
-  if ([...dirs].some((d) => d.endsWith("_data"))) {
+  if ([...dirs].some((d) => /_data$/i.test(d))) {
     result.evidences.push("Found *_Data directory");
   }
 
@@ -82,8 +95,29 @@ const coreDetection = async (gameDir) => {
   }
 
   // RPG Maker detection logic
-  if ([...files].some((f) => /^rgss.*\.dll$/.test(f))) {
+  if ([...files].some((f) => RGSS_REGEXP.test(f))) {
     result.evidences.push("Found rgss*.dll");
+  }
+  if (files.has("game.ini")) {
+    result.evidences.push("Found game.ini");
+  }
+  if ([...dirs].some((d) => d === "data")) {
+    const dataDirTree = new GameTree(
+      path.join(
+        gameDirTree.root,
+        gameDirTree.finder.lookupOriginalByName("data", {
+          file: false,
+        }),
+      ),
+    );
+    const { files: dataFiles } = await dataDirTree.finder.rootIndex();
+
+    if ([...dataFiles].some((f) => RDATA_REGEXP.test(f))) {
+      result.evidences.push(EVIDENCES.RPGM_DATA_FILES);
+    }
+  }
+  if ([...files].some((f) => RGSS_ARCHIVE_REGEXP.test(f))) {
+    result.evidences.push("Found RPG Maker archive");
   }
 
   // Godot detection logic
@@ -105,32 +139,46 @@ const coreDetection = async (gameDir) => {
 
   if (result.evidences.length > 0) {
     if (
-      checkIfEvidenceExists(result.evidences, "Engine directory") &&
-      checkIfEvidenceExists(result.evidences, "-Shipping.exe")
+      checkIfEvidenceExists(
+        result.evidences,
+        KNOWN_ENGINES_EVIDENCES[KNOWN_ENGINES.UNREAL],
+      )
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNREAL];
     }
 
     if (
-      checkIfEvidenceExists(result.evidences, "UnityPlayer.dll") ||
-      checkIfEvidenceExists(result.evidences, "*_Data")
+      checkIfEvidenceExists(
+        result.evidences,
+        KNOWN_ENGINES_EVIDENCES[KNOWN_ENGINES.UNITY],
+      )
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.UNITY];
     }
 
-    if (checkIfEvidenceExists(result.evidences, "data.win")) {
+    if (
+      checkIfEvidenceExists(
+        result.evidences,
+        KNOWN_ENGINES_EVIDENCES[KNOWN_ENGINES.GM],
+      )
+    ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.GM];
     }
 
-    if (checkIfEvidenceExists(result.evidences, "rgss*.dll")) {
+    if (
+      checkIfEvidenceExists(
+        result.evidences,
+        KNOWN_ENGINES_EVIDENCES[KNOWN_ENGINES.RPGM],
+      )
+    ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.RPGM];
     }
 
     if (
-      checkIfEvidenceExists(result.evidences, "nw.dll") ||
-      checkIfEvidenceExists(result.evidences, "package.nw") ||
-      (checkIfEvidenceExists(result.evidences, "index.html") &&
-        checkIfEvidenceExists(result.evidences, "package.json"))
+      checkIfEvidenceExists(
+        result.evidences,
+        KNOWN_ENGINES_EVIDENCES[KNOWN_ENGINES.NWJS],
+      )
     ) {
       result.engine = KNOWN_ENGINES_BRANDS[KNOWN_ENGINES.NWJS];
     }
