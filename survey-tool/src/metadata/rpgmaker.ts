@@ -1,28 +1,42 @@
 import path from "path";
 import { GameTree } from "jpt-commons/game-tree";
-import { Metadata, RefinedDetectionResult } from "./RefinedDetectionResult.js";
+import { Metadata, RefinedDetectionResult } from "./RefinedDetectionResult.ts";
 
 const RGSS_REGEXP = /^rgss([123])\d{2}[a-z]?\.dll$/;
 const RGSS_ARCHIVE_REGEXP = /\.rgss(?:ad|2a|3a)$/;
 const RDATA_REGEXP = /\.r(?:x|v)data(?:2)?$/;
 
-const rgssGenerationFromDll = (filename) => {
-  const match = RGSS_REGEXP.exec(filename);
+export const RgssGeneration = {
+  XP: "XP",
+  VX: "VX",
+  VX_Ace: "VX Ace",
+} as const;
+
+export type RgssGeneration =
+  (typeof RgssGeneration)[keyof typeof RgssGeneration];
+
+interface RgssDll {
+  filename: string;
+  generation: RgssGeneration;
+}
+
+const rgssGenerationFromDll = (filename: string): RgssDll | null => {
+  const match: RegExpExecArray | null = RGSS_REGEXP.exec(filename);
   if (!match) return null;
 
   const generations = {
-    1: "XP",
-    2: "VX",
-    3: "VX Ace",
+    1: RgssGeneration.XP,
+    2: RgssGeneration.VX,
+    3: RgssGeneration.VX_Ace,
   };
 
   return {
     filename,
-    generation: generations[match[1]],
+    generation: generations[match[1] as unknown as keyof typeof generations],
   };
 };
 
-const resolveGeneration = (metadatas) => {
+const resolveGeneration = (metadatas: Metadata[]): string | null => {
   // ini  >  dll  >  Data/  >  archive
   // Game.ini's Library= line wins because that is literally the line
   //  the launcher reads to choose a runtime;
@@ -45,8 +59,12 @@ const resolveGeneration = (metadatas) => {
   return null;
 };
 
-const metadataRPGMaker = async (files, dirs, gameDirTree) => {
-  const metadata = [];
+const metadataRPGMaker = async (
+  files: Set<string>,
+  dirs: Set<string>,
+  gameDirTree: GameTree,
+): Promise<RefinedDetectionResult> => {
+  const metadata: Metadata[] = [];
 
   await gameDirTree.finder.rootIndex();
 
@@ -76,7 +94,7 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
     );
     const libraryLine = gameIniContent
       .split("\n")
-      .find((line) => line.startsWith("Library="));
+      .find((line: string) => line.startsWith("Library="));
     if (libraryLine) {
       const libraryFile = libraryLine.split("=")[1].trim();
       const runtime = rgssGenerationFromDll(libraryFile.toLowerCase());
@@ -97,25 +115,37 @@ const metadataRPGMaker = async (files, dirs, gameDirTree) => {
         gameDirTree.root,
         gameDirTree.finder.lookupOriginalByName("data", {
           file: false,
-        }),
+        }) ?? "",
       ),
     );
     const { files: dataFiles } = await dataDirTree.finder.rootIndex();
     if ([...dataFiles].some((f) => f.endsWith(".rxdata"))) {
-      metadata.push(new Metadata("XP", "Data/", { rgss: ".rxdata" }));
+      metadata.push(
+        new Metadata(RgssGeneration.XP, "Data/", { rgss: ".rxdata" }),
+      );
     } else if ([...dataFiles].some((f) => f.endsWith(".rvdata"))) {
-      metadata.push(new Metadata("VX", "Data/", { rgss: ".rvdata" }));
+      metadata.push(
+        new Metadata(RgssGeneration.VX, "Data/", { rgss: ".rvdata" }),
+      );
     } else if ([...dataFiles].some((f) => f.endsWith(".rvdata2"))) {
-      metadata.push(new Metadata("VX Ace", "Data/", { rgss: ".rvdata2" }));
+      metadata.push(
+        new Metadata(RgssGeneration.VX_Ace, "Data/", { rgss: ".rvdata2" }),
+      );
     }
   }
 
   if ([...files].some((f) => f.endsWith(".rgssad"))) {
-    metadata.push(new Metadata("XP", "archive", { rgss: ".rgssad" }));
+    metadata.push(
+      new Metadata(RgssGeneration.XP, "archive", { rgss: ".rgssad" }),
+    );
   } else if ([...files].some((f) => f.endsWith(".rgss2a"))) {
-    metadata.push(new Metadata("VX", "archive", { rgss: ".rgss2a" }));
+    metadata.push(
+      new Metadata(RgssGeneration.VX, "archive", { rgss: ".rgss2a" }),
+    );
   } else if ([...files].some((f) => f.endsWith(".rgss3a"))) {
-    metadata.push(new Metadata("VX Ace", "archive", { rgss: ".rgss3a" }));
+    metadata.push(
+      new Metadata(RgssGeneration.VX_Ace, "archive", { rgss: ".rgss3a" }),
+    );
   }
 
   const gens = metadata.map((m) => m.generation);

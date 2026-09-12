@@ -4,11 +4,11 @@
   "description": "",
   "type": "module",
   "bin": {
-    "joiplay-survey": "./bin/joiplay-survey.js"
+    "joiplay-survey": "./bin/joiplay-survey.ts"
   },
   "scripts": {
-    "survey-on": "chmod +x ./bin/joiplay-survey.js && pnpm link --global",
-    "check": "node --check ./bin/joiplay-survey.js",
+    "survey-on": "chmod +x ./bin/joiplay-survey.ts && pnpm link --global",
+    "check": "tsc --noEmit",
     "test": "node --test ./test/*.test.js"
   },
   "engines": {

@@ -3,11 +3,8 @@
 // joiplay-survey list <games-dir>
 // joiplay-survey scan <games-dir>
 
-import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
-import { ShimError, AmbigousError } from "jpt-commons/errors";
-import { verifyInstalledEntry } from "jpt-commons/verify-entry";
-import { GameTree } from "jpt-commons/game-tree";
-import { listGames } from "../src/list.js";
+import { ShimError } from "jpt-commons/errors";
+import { listGames } from "../src/list.ts";
 
 const args = process.argv.slice(2);
 
@@ -18,8 +15,6 @@ const main = async () => {
     console.error("Usage: joiplay-survey <command> <games-dir> [options]");
     process.exit(1);
   }
-
-  const isDryRun = options.includes("--dry-run");
 
   let result;
 
@@ -34,21 +29,17 @@ const main = async () => {
       return 1;
   }
 
-  if (result === "ok") {
-    console.log(`Command ${command} complete.`);
-  }
-
   return 0;
 };
 
 try {
   process.exitCode = await main();
-} catch (error) {
+} catch (error: unknown) {
   if (error instanceof ShimError) {
     console.error(`Error: ${error.message}`);
     process.exitCode = error.exitCode;
   } else {
-    console.error(`Unexpected error": ${error.message}`, error);
+    console.error(`Unexpected error": ${(error as Error).message}`, error);
     process.exitCode = 10;
   }
 }

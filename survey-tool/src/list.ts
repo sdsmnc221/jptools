@@ -12,26 +12,26 @@ import {
   RGSS_REGEXP,
   RGSS_ARCHIVE_REGEXP,
   RDATA_REGEXP,
-} from "./metadata/rpgmaker.js";
+} from "./metadata/rpgmaker.ts";
 import {
   RefinedDetectionResult,
   Metadata,
-} from "./metadata/RefinedDetectionResult.js";
+} from "./metadata/RefinedDetectionResult.ts";
 
-const checkIfEvidenceExists = (evidences, keywords) => {
+const checkIfEvidenceExists = (evidences: string[], keywords: string[]) => {
   return keywords.some((keyword) => evidences.includes(keyword));
 };
 
-const listGames = async (gamesDir) => {
+const listGames = async (gamesDir: string) => {
   const gamesTree = new GameTree(gamesDir);
 
   if (!(await gamesTree.directoryExists("."))) {
     throw new Error(`Games directory does not exist: ${gamesTree.root}`);
   }
 
-  let detectionResults = {};
+  let detectionResults: Record<string, RefinedDetectionResult> = {};
   // Return the list of direct child directories
-  const directChildren = await gamesTree.directChildren();
+  const directChildren: string[] = await gamesTree.directChildren();
   console.log(
     `This directory contains ${directChildren.length} direct child directories.`,
   );
@@ -42,16 +42,26 @@ const listGames = async (gamesDir) => {
   return detectionResults;
 };
 
-const coreDetection = async (gameDir) => {
+interface CoreDetectionResult {
+  engine: string | null;
+  evidences: string[];
+  metadata: Metadata | null;
+  reason: string | null;
+}
+
+const coreDetection = async (
+  gameDir: string,
+): Promise<RefinedDetectionResult> => {
   // | # | Engine | Marker |
   // | --- | --- | --- |
   // | 5 | Godot | any `.pck` with a verified `GDPC` header, **or** an `.exe` with a pack glued on (milestone 5) |
 
   const gameDirTree = new GameTree(gameDir);
-  const result = {
+  const result: CoreDetectionResult = {
     engine: null,
     evidences: [],
     metadata: null,
+    reason: null,
   };
 
   // Gather evidences
@@ -105,7 +115,7 @@ const coreDetection = async (gameDir) => {
         gameDirTree.root,
         gameDirTree.finder.lookupOriginalByName("data", {
           file: false,
-        }),
+        }) ?? "",
       ),
     );
     const { files: dataFiles } = await dataDirTree.finder.rootIndex();
@@ -231,9 +241,13 @@ const coreDetection = async (gameDir) => {
 };
 
 const refinedDetection = async (
-  { files, dirs, gameDirTree },
-  possibleEngine,
-  classificationReason,
+  {
+    files,
+    dirs,
+    gameDirTree,
+  }: { files: Set<string>; dirs: Set<string>; gameDirTree: GameTree },
+  possibleEngine: string | null,
+  classificationReason: string,
 ) => {
   let result;
   switch (classificationReason) {
