@@ -1,0 +1,24 @@
+{
+  "name": "survey-tool",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "bin": {
+    "joiplay-survey": "./bin/joiplay-survey.ts"
+  },
+  "scripts": {
+    "survey-on": "chmod +x ./bin/joiplay-survey.ts && pnpm link --global",
+    "check": "tsc --noEmit",
+    "test": "node --test ./test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "keywords": [],
+  "author": "sdsmnc221",
+  "license": "ISC",
+  "packageManager": "pnpm@10.28.2",
+  "dependencies": {
+    "jpt-commons": "workspace:*"
+  }
+}
