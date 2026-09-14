@@ -13,3 +13,6 @@ export const KNOWN_ENGINES = {
   MZ: "rgpmmz",
   GD: "godot",
 };
+
+export const JP_NAMESPACE = "cyou.joiplay.joiplay";
+export const JP_GAME_BASE = "/storage/emulated/0/JoiPlay/games";
