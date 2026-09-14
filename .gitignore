@@ -9,6 +9,7 @@ node_modules/
 # log.txt that proved a WebView cannot read the button table
 JoiPlayInputCapture_patch/
 capture/
+profiles/
 
 # captured device data, not source
 rg-input-capture.json
