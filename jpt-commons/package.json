@@ -7,9 +7,11 @@
   "exports": {
     "./errors": "./src/errors.js",
     "./game-tree": "./src/game-tree.js",
+    "./adb-device": "./src/adb-device.js",
     "./rga": "./src/rga.js",
     "./verify-entry": "./src/verify-entry.js",
     "./utils/constants": "./src/utils/constants.js",
+    "./utils": "./src/utils/index.js",
     "./scan-media": "./src/scan-media.js"
   },
   "scripts": {

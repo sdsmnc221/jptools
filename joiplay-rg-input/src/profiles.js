@@ -200,6 +200,14 @@ export const GLOBAL_DEFAULT = {
   // C, Z, L1, R1, L2, R2 intentionally absent - tier 3, raw passthrough
 };
 
+export const PROFILES = {
+  "rg-rotate": GLOBAL_DEFAULT,
+  monsterest: MONSTEREST_WASD_PROFILE,
+  elderfield: ELDERFIELD,
+  moonstone: MOONSTONE,
+  "pokemon-insurgence": POKEMON_INSURGENCE,
+};
+
 export function mergeProfile(overrides = {}) {
   return { ...GLOBAL_DEFAULT, ...overrides };
 }
