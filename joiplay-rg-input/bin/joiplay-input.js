@@ -79,7 +79,7 @@ const main = async () => {
       return 1;
   }
 
-  if (result === "ok") {
+  if (result.includes("ok")) {
     console.log(`Command ${command} complete.`);
   }
 
