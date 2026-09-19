@@ -85,7 +85,12 @@ const gatherInteractively = async (gameDir) => {
     console.log("Plug your device into the computer.");
 
     // Check if the device is plugged via adb
-    await AdbDevice.isDevicePlugged();
+    const devicePlugged = await AdbDevice.isDevicePlugged();
+
+    if (devicePlugged instanceof Error) {
+      console.log(devicePlugged.message);
+      throw devicePlugged;
+    }
 
     console.log("Device detected via adb.");
 
@@ -178,6 +183,7 @@ const gatherInteractively = async (gameDir) => {
     }
 
     const {
+      jpGameDir: jpGameDir_,
       deviceReachable,
       jpRunning,
       targetDirExists,
@@ -191,15 +197,15 @@ const gatherInteractively = async (gameDir) => {
       targetDirExists,
       gamepadExisting,
       keymapExisting,
-      jpGameDir,
+      jpGameDir: jpGameDir_,
     });
 
-    if (deviceReachable !== 0) {
+    if (!deviceReachable) {
       console.log("Device not reachable. Aborting installation.");
       return;
     }
 
-    if (jpRunning === 0) {
+    if (jpRunning) {
       console.log("JoiPlay is still running. Aborting installation.");
       return;
     }
@@ -213,11 +219,11 @@ const gatherInteractively = async (gameDir) => {
     // Check if the user consented to proceed
     if (!proceedConsent.toLowerCase().match(/^y/i)) {
       console.log("Installation aborted by user.");
-      return;
+      throw new Error("Installation aborted by user.");
     }
 
     return Promise.resolve({
-      selectedDevice: device,
+      selectedDevice,
       jpGameId,
       jpGameDir,
       targetDirExists,

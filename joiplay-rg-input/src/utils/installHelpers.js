@@ -2,10 +2,8 @@ import path from "node:path";
 import { AdbDevice } from "jpt-commons/adb-device";
 import { JP_NAMESPACE } from "jpt-commons/utils/constants";
 
-const checkPreconditions = (device, jpGameDir) => {
-  console.log("Verifying...");
-  const adbDevice = new AdbDevice(device);
-  const { status: deviceReachable } = adbDevice.state();
+const checkPreconditions = (adbDevice, jpGameDir) => {
+  const deviceReachable = adbDevice.reachable();
   const jpRunning = adbDevice.isAppRunning(JP_NAMESPACE);
   const targetDirExists = adbDevice.exists(jpGameDir);
   const gamepadExisting = adbDevice.exists(
@@ -14,7 +12,7 @@ const checkPreconditions = (device, jpGameDir) => {
   const keymapExisting = adbDevice.exists(path.join(jpGameDir, "keymap.json"));
 
   return {
-    device,
+    jpGameDir,
     deviceReachable,
     jpRunning,
     targetDirExists,
@@ -31,6 +29,7 @@ const formatChecks = ({
   keymapExisting,
   jpGameDir,
 }) => {
+  console.log("Verifying...");
   console.log(`
         Device reachable:         ${deviceReachable}
         JoiPlay not running:      ${jpRunning}

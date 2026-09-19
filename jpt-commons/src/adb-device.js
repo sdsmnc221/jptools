@@ -22,6 +22,10 @@ export class AdbDevice {
     return stdout.trim();
   }
 
+  reachable() {
+    return this.state() === "device";
+  }
+
   isAppRunning(packageName) {
     const { status } = this.#run(["shell", "pidof", packageName]);
     return status === 0;
@@ -61,6 +65,8 @@ export class AdbDevice {
       execFileSync("adb", ["wait-for-device"], {
         timeout: 10_000,
       });
+
+      return true;
     } catch (error) {
       if (error.code === "ETIMEDOUT") {
         return new Error("Device not detected within the timeout period.");
