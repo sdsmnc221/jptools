@@ -6,14 +6,12 @@ const checkPreconditions = (device, jpGameDir) => {
   console.log("Verifying...");
   const adbDevice = new AdbDevice(device);
   const { status: deviceReachable } = adbDevice.state();
-  const { status: jpRunning } = adbDevice.isAppRunning(JP_NAMESPACE);
-  const { status: targetDirExists } = adbDevice.exists(jpGameDir);
-  const { status: gamepadExisting } = adbDevice.exists(
+  const jpRunning = adbDevice.isAppRunning(JP_NAMESPACE);
+  const targetDirExists = adbDevice.exists(jpGameDir);
+  const gamepadExisting = adbDevice.exists(
     path.join(jpGameDir, "gamepad.json"),
   );
-  const { status: keymapExisting } = adbDevice.exists(
-    path.join(jpGameDir, "keymap.json"),
-  );
+  const keymapExisting = adbDevice.exists(path.join(jpGameDir, "keymap.json"));
 
   return {
     device,
@@ -34,13 +32,13 @@ const formatChecks = ({
   jpGameDir,
 }) => {
   console.log(`
-        Device reachable:         ${deviceReachable === 0}
-        JoiPlay not running:      ${jpRunning !== 0}
-        Target directory exists:  ${targetDirExists === 0 ? "yes" : "does not exist, will create"}
+        Device reachable:         ${deviceReachable}
+        JoiPlay not running:      ${jpRunning}
+        Target directory exists:  ${targetDirExists ? "yes" : "does not exist, will create"}
         Will write gamepad.json and keymap.json to
           ${jpGameDir}
-            gamepad.json   ${gamepadExisting === 0 ? "exists -> will be overwritten" : "does not exist"}
-            keymap.json    ${keymapExisting === 0 ? "exists -> will be overwritten" : "does not exist"}   
+            gamepad.json   ${gamepadExisting ? "exists -> will be overwritten" : "does not exist"}
+            keymap.json    ${keymapExisting ? "exists -> will be overwritten" : "does not exist"}   
       `);
 
   console.log("Verification complete");

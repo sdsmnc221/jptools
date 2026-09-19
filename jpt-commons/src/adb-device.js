@@ -1,72 +1,76 @@
 import { spawnSync, execFileSync } from "child_process";
 
-export async function isDevicePlugged() {
-  try {
-    execFileSync("adb", ["wait-for-device"], {
-      timeout: 10_000,
-    });
-  } catch (error) {
-    if (error.code === "ETIMEDOUT") {
-      console.log(
-        "Device not detected within the timeout period. Aborting installation.",
-      );
-      return;
-    } else if (error.code === "ENOENT") {
-      console.log(
-        "ADB not found. Please ensure adb is installed and in your PATH.",
-      );
-      return;
-    } else {
-      throw error;
-    }
-  }
-}
-
-export async function listDevices() {
-  const devices = execFileSync("adb", ["devices"])
-    .toString()
-    .split("\n")
-    .slice(1)
-    .filter((line) => line.trim() !== "")
-    .map((line) => line.split("\t")[0]);
-
-  return devices;
-}
-
 export class AdbDevice {
   constructor(serial) {
     this.serial = serial;
   }
 
   #run(args) {
-    return spawnSync("adb", ["-s", this.serial, ...args], {
-      encoding: "utf-8",
-    });
+    const { status, signal, output, pid, stdout, stderr } = spawnSync(
+      "adb",
+      ["-s", this.serial, ...args],
+      {
+        encoding: "utf-8",
+      },
+    );
+
+    return { status, signal, output, pid, stdout, stderr };
   }
 
   state() {
-    return this.#run(["get-state"]);
+    const { stdout } = this.#run(["get-state"]);
+    return stdout.trim();
   }
 
   isAppRunning(packageName) {
-    return this.#run(["shell", "pidof", packageName]);
+    const { status } = this.#run(["shell", "pidof", packageName]);
+    return status === 0;
   }
 
   exists(remotePath) {
-    return this.#run(["shell", "ls", remotePath]);
+    const { status } = this.#run(["shell", "ls", remotePath]);
+    return status === 0;
   }
 
   mkdirp(remotePath) {
-    return this.#run(["shell", "mkdir", "-p", remotePath]);
+    try {
+      this.#run(["shell", "mkdir", "-p", remotePath]);
+    } catch (error) {
+      console.log(`Failed to create directory ${remotePath}:`, error);
+      throw error;
+    }
   }
 
   push(localPath, remotePath) {
     return this.#run(["push", localPath, remotePath]);
   }
 
-  static list() {}
+  static list() {
+    const devices = execFileSync("adb", ["devices"])
+      .toString()
+      .split("\n")
+      .slice(1)
+      .filter((line) => line.trim() !== "")
+      .map((line) => line.split("\t")[0]);
 
-  static waitFor(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+    return devices;
+  }
+
+  static isDevicePlugged() {
+    try {
+      execFileSync("adb", ["wait-for-device"], {
+        timeout: 10_000,
+      });
+    } catch (error) {
+      if (error.code === "ETIMEDOUT") {
+        return new Error("Device not detected within the timeout period.");
+      } else if (error.code === "ENOENT") {
+        return new Error(
+          "ADB not found. Please ensure adb is installed and in your PATH.",
+        );
+      } else {
+        throw error;
+      }
+    }
   }
 }

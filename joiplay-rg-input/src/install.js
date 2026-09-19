@@ -5,11 +5,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { JP_NAMESPACE, JP_GAME_BASE } from "jpt-commons/utils/constants";
 import { mkdirSync, statSync } from "fs";
 import { stdin as input, stdout as output } from "node:process";
-import {
-  isDevicePlugged,
-  listDevices,
-  AdbDevice,
-} from "jpt-commons/adb-device";
+import { AdbDevice } from "jpt-commons/adb-device";
 import { GameTree } from "jpt-commons/game-tree";
 import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
 import { gameId } from "jpt-commons/utils";
@@ -89,12 +85,12 @@ const gatherInteractively = async (gameDir) => {
     console.log("Plug your device into the computer.");
 
     // Check if the device is plugged via adb
-    await isDevicePlugged();
+    await AdbDevice.isDevicePlugged();
 
     console.log("Device detected via adb.");
 
     // List all connected devices via adb
-    const devices = await listDevices();
+    const devices = await AdbDevice.list();
     for (let i = 0; i < devices.length; i++) {
       console.log(`     [${i + 1}] ${devices[i]})`);
     }
@@ -110,9 +106,9 @@ const gatherInteractively = async (gameDir) => {
     // Initialize the selected device using the AdbDevice class
     // Check for if device is in a ready state
     const selectedDevice = new AdbDevice(deviceAnswer); // pin --serial ?
-    if (selectedDevice.state().status !== 0) {
+    if (selectedDevice.state() !== "device") {
       console.log(
-        `Selected device is not in a ready state. Current state: ${selectedDevice.state().status}. Aborting installation.`,
+        `Selected device is not in a ready state. Current state: ${selectedDevice.state()}. Aborting installation.`,
       );
       return;
     }
