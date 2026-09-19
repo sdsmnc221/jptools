@@ -11,8 +11,20 @@ const confirm = async (rl, question, defaultValue = true) => {
 };
 
 const choose = async (rl, question, items) => {
-  const answer = await rl.question(
+  const answer = await ask(
+    rl,
     `${question} Enter the number corresponding to your choice: (${items.map((item, index) => `${index + 1}. ${item}`).join(", ")}): `,
+    {
+      default: items.length,
+      maxRetries: 3,
+      validate: (input) => {
+        const index = parseInt(input, 10) - 1;
+        if (index >= 0 && index < items.length) {
+          return true;
+        }
+        return "Invalid choice. Please select a valid option.";
+      },
+    },
   );
 
   const index = parseInt(answer, 10) - 1;
@@ -39,36 +51,18 @@ const ask = async (
     console.log(bounceLog(answer));
   }
 
-  if (validate) {
-    for (let i = 0; i <= maxRetries; i++) {
-      const validationResult = validate(answer);
-      if (validationResult === true) {
-        break;
-      }
-      console.log(validationResult);
-      if (i < maxRetries) {
-        answer = await ask(rl, question, {
-          default: defaultValue,
-          validate,
-          bounceLog,
-          maxRetries: maxRetries - i,
-        });
-      } else {
-        console.log(
-          "Maximum retries reached. Should we proceed with your last attempt?",
-        );
-        answer = await ask(rl, question, {
-          default: defaultValue,
-          validate,
-          bounceLog,
-          maxRetries: 0,
-        });
-      }
-    }
-  } else if (answer === "" && defaultValue !== undefined) {
-    return defaultValue;
+  for (let i = 0; i <= maxRetries; i++) {
+    answer =
+      (
+        await rl.question(
+          `${question} ${defaultValue && `(${defaultValue})`}: `,
+        )
+      ).trim() || defaultValue;
+    const validationResult = validate ? validate(answer) : true;
+    if (validationResult === true) return answer;
   }
 
+  // out of retries, return the last answer
   return answer;
 };
 

@@ -17,6 +17,15 @@ export class AdbDevice {
     return { status, signal, output, pid, stdout, stderr };
   }
 
+  #runOrThrow(args, description) {
+    const { status, stdout, stderr } = this.#run(args);
+    if (status !== 0) {
+      throw new Error(`${description} failed: ${stderr.trim()}`);
+    }
+
+    return stdout;
+  }
+
   state() {
     const { stdout } = this.#run(["get-state"]);
     return stdout.trim();
@@ -37,16 +46,17 @@ export class AdbDevice {
   }
 
   mkdirp(remotePath) {
-    try {
-      this.#run(["shell", "mkdir", "-p", remotePath]);
-    } catch (error) {
-      console.log(`Failed to create directory ${remotePath}:`, error);
-      throw error;
-    }
+    return this.#runOrThrow(
+      ["shell", "mkdir", "-p", remotePath],
+      `create directory ${remotePath}`,
+    );
   }
 
   push(localPath, remotePath) {
-    return this.#run(["push", localPath, remotePath]);
+    return this.#runOrThrow(
+      ["push", localPath, remotePath],
+      `push ${localPath} to ${remotePath}`,
+    );
   }
 
   static list() {
@@ -69,9 +79,9 @@ export class AdbDevice {
       return true;
     } catch (error) {
       if (error.code === "ETIMEDOUT") {
-        return new Error("Device not detected within the timeout period.");
+        throw new Error("Device not detected within the timeout period.");
       } else if (error.code === "ENOENT") {
-        return new Error(
+        throw new Error(
           "ADB not found. Please ensure adb is installed and in your PATH.",
         );
       } else {

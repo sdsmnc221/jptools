@@ -31,7 +31,10 @@ const writeInputPair = async ({
     console.log("Target directory exists.");
   } else {
     console.log("Target directory does not exist, will create.");
-    selectedDevice.mkdir(jpGameDir);
+    const mkdirResult = await selectedDevice.mkdirp(jpGameDir); // stdout
+    console.log(
+      `Created directory on device: ${jpGameDir} with result: ${mkdirResult}`,
+    );
   }
 
   console.log("Proceeding with installation in the target directory.");
@@ -59,8 +62,10 @@ const writeInputPair = async ({
 
     for (const file of files) {
       console.log(`Created file: ${file}`);
-      selectedDevice.push(file, jpGameDir);
-      console.log(`Pushed file: ${file} to device: ${selectedDevice}`);
+      const pushResult = selectedDevice.push(file, jpGameDir); // stdout
+      console.log(
+        `Pushed file: ${file} to device: ${selectedDevice} to: ${pushResult}`,
+      );
     }
 
     return "ok, installation completed";
@@ -88,11 +93,6 @@ const gatherInteractively = async (gameDir) => {
 
     // Check if the device is plugged via adb
     const devicePlugged = await AdbDevice.isDevicePlugged();
-
-    if (devicePlugged instanceof Error) {
-      console.log(devicePlugged.message);
-      throw devicePlugged;
-    }
 
     console.log("Device detected via adb.");
 
@@ -270,8 +270,9 @@ const install = async (
     return await writeInputPair({
       selectedDevice,
       jpGameDir,
-      gamepad,
-      keymap,
+      gameDir,
+      gamepadExisting,
+      keymapExisting,
       dryRun,
       targetDirExists,
     });
