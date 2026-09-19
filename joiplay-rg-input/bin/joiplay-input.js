@@ -4,15 +4,11 @@
 // joiplay-input install <game-dir> [--profile rg-rotate] [--dry-run]
 // joiplay-input verify  <game-dir>              are the shim files present and consistent, render the resulting keymap.json
 // joiplay-input remove  <game-dir>              delete only files this tool created
+// joiplay-input install --plug-mode             install with plug mode enabled (e.g. ab enabled)
 
-import { mkdirSync, existsSync } from "fs";
-import path from "path";
-import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
-import { ShimError, AmbigousError } from "jpt-commons/errors";
-import { verifyInstalledEntry } from "jpt-commons/verify-entry";
-import { GameTree } from "jpt-commons/game-tree";
-import { buildKeymap } from "../src/keymap.js";
-import { buildGamepad } from "../src/gamepad.js";
+import { ShimError } from "jpt-commons/errors";
+import { install } from "../src/install.js";
+import { verify } from "../src/verify.js";
 import {
   ELDERFIELD,
   GLOBAL_DEFAULT,
@@ -30,85 +26,6 @@ const PROFILES = {
   "pokemon-insurgence": POKEMON_INSURGENCE,
 };
 
-const install = async (gameDir, { profile = "rg-rotate", dryRun } = {}) => {
-  const tree = new GameTree(gameDir);
-  const stagingDir = getDefaultPatchDir(tree.root, tree.gameName);
-  mkdirSync(stagingDir, { recursive: true });
-
-  const resolvedProfile = mergeProfile(PROFILES[profile] || {});
-
-  const keymap = buildKeymap(resolvedProfile);
-  const gamepad = buildGamepad(resolvedProfile);
-
-  if (!dryRun) {
-    const files = [
-      await createShimFile(
-        "keymap.json",
-        `${JSON.stringify(keymap, null, 2)}\n`,
-        stagingDir,
-      ),
-      ...(gamepad
-        ? [
-            await createShimFile(
-              "gamepad.json",
-              JSON.stringify(gamepad, null, 2),
-              stagingDir,
-            ),
-          ]
-        : []),
-    ];
-
-    await packGame(tree.root, tree.gameName, files, {
-      defaultPatchFilename: "patch_input.rga",
-    });
-  } else {
-    console.log(
-      `Dry run: would create keymap.json in ${stagingDir} for device profile ${profile}`,
-    );
-    console.log(keymap);
-    if (gamepad) {
-      console.log(`----------`);
-      console.log(`Dry run: would create gamepad.json in ${stagingDir}.`);
-      console.log(gamepad);
-    }
-  }
-
-  return "ok";
-};
-
-const verify = async (gameDir, { profile = "rg-rotate" }) => {
-  const tree = new GameTree(gameDir);
-  const stagingDir = getDefaultPatchDir(tree.root, tree.gameName);
-
-  const resolvedProfile = mergeProfile(PROFILES[profile] || {});
-  const expectedKeymap = buildKeymap(resolvedProfile);
-
-  console.log(
-    `Verify: would create keymap.json in ${stagingDir} for device profile ${profile}`,
-  );
-  console.log(expectedKeymap);
-  // Compare like-for-like:
-  const installedRgaPath = path.join(stagingDir, "patch_input.rga");
-
-  if (!existsSync(installedRgaPath)) {
-    console.log("Not installed — run `install` first.");
-    throw new AmbigousError(
-      `Verified finished. Not installed — run \`install\` first.`,
-    );
-  }
-
-  const verificationsResults = verifyInstalledEntry(
-    stagingDir,
-    "keymap.json",
-    expectedKeymap,
-    "patch_input.rga",
-  );
-
-  console.log("keymap.json is:", verificationsResults);
-
-  return "ok";
-};
-
 const remove = async (gameDir, { dryRun } = {}) => {
   return "stubbed";
 };
@@ -124,6 +41,7 @@ const main = async () => {
   }
 
   const isDryRun = options.includes("--dry-run");
+  const plugMode = options.includes("--plug-mode");
   const profileIndex = options.indexOf("--profile");
   const profile =
     profileIndex !== -1 && options[profileIndex + 1]
@@ -148,7 +66,7 @@ const main = async () => {
       );
       return 0;
     case "install":
-      result = await install(gameDir, { dryRun: isDryRun, profile });
+      result = await install(gameDir, { dryRun: isDryRun, profile, plugMode });
       break;
     case "verify":
       result = await verify(gameDir, { profile });
@@ -161,7 +79,7 @@ const main = async () => {
       return 1;
   }
 
-  if (result === "ok") {
+  if (result.includes("ok")) {
     console.log(`Command ${command} complete.`);
   }
 
@@ -175,7 +93,7 @@ try {
     console.error(`Error: ${error.message}`);
     process.exitCode = error.exitCode;
   } else {
-    console.error(`Unexpected error": ${error.message}`, error);
+    console.error(`Unexpected error: ${error.message}`);
     process.exitCode = 10;
   }
 }
