@@ -93,7 +93,7 @@ try {
     console.error(`Error: ${error.message}`);
     process.exitCode = error.exitCode;
   } else {
-    console.error(`Unexpected error": ${error.message}`, error);
+    console.error(`Unexpected error: ${error.message}`);
     process.exitCode = 10;
   }
 }

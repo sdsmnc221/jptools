@@ -3,23 +3,23 @@ const confirm = async (rl, question, defaultValue = true) => {
     `${question} (${defaultValue ? "Y/n" : "y/N"}): `,
   );
   if (answer === "" && defaultValue === true) {
-    return "y";
+    return true;
   } else if (answer === "" && defaultValue === false) {
-    return "n";
+    return false;
   }
-  return answer.toLowerCase().match(/^y/i) ? "y" : "n";
+  return answer.toLowerCase().match(/^y/i) ? true : false;
 };
 
 const choose = async (rl, question, items) => {
   const answer = await rl.question(
-    `${question} (${items.map((item, index) => `${index + 1}. ${item}`).join(", ")}): `,
+    `${question} Enter the number corresponding to your choice: (${items.map((item, index) => `${index + 1}. ${item}`).join(", ")}): `,
   );
 
   const index = parseInt(answer, 10) - 1;
   if (index >= 0 && index < items.length) {
     return items[index];
   } else {
-    return null;
+    throw new Error("Invalid choice. Please select a valid option.");
   }
 };
 
@@ -29,35 +29,38 @@ const ask = async (
   { default: defaultValue, validate, bounceLog, maxRetries = 0 },
 ) => {
   let answer;
+
+  answer = await rl.question(
+    `${question} ${defaultValue && `(${defaultValue})`}: `,
+  );
+  answer = answer.trim() === "" ? defaultValue : answer.trim();
+
   if (bounceLog) {
-    console.log(bounceLog(answer ?? defaultValue));
+    console.log(bounceLog(answer));
   }
 
-  answer = await rl.question(`${question} (${defaultValue ? "Y/n" : "y/N"}): `);
-  answer = answer.trim();
-
   if (validate) {
-    let retries = 0;
-    while (retries < maxRetries) {
+    for (let i = 0; i <= maxRetries; i++) {
       const validationResult = validate(answer);
       if (validationResult === true) {
         break;
       }
       console.log(validationResult);
-      retries++;
-      if (retries < maxRetries) {
-        return ask(rl, question, {
+      if (i < maxRetries) {
+        answer = await ask(rl, question, {
           default: defaultValue,
           validate,
-          maxRetries: maxRetries - retries,
+          bounceLog,
+          maxRetries: maxRetries - i,
         });
       } else {
         console.log(
-          "Maximum retries reached.  Should we proceed with your last attempt? The correct game id is...?",
+          "Maximum retries reached. Should we proceed with your last attempt?",
         );
-        return await ask(rl, question, {
+        answer = await ask(rl, question, {
           default: defaultValue,
           validate,
+          bounceLog,
           maxRetries: 0,
         });
       }

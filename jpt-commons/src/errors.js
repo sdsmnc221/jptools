@@ -18,6 +18,12 @@ export class AmbigousError extends ShimError {
   }
 }
 
+export class AbortedError extends ShimError {
+  constructor(message) {
+    super(message, 9);
+  }
+}
+
 export class InvalidInputError extends ShimError {
   constructor(message) {
     super(message, 4);

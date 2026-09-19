@@ -5,6 +5,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { JP_NAMESPACE, JP_GAME_BASE } from "jpt-commons/utils/constants";
 import { mkdirSync, statSync } from "fs";
 import { stdin as input, stdout as output } from "node:process";
+
+import { AbortedError } from "jpt-commons/errors";
 import { AdbDevice } from "jpt-commons/adb-device";
 import { GameTree } from "jpt-commons/game-tree";
 import { createShimFile, packGame, getDefaultPatchDir } from "jpt-commons/rga";
@@ -105,7 +107,7 @@ const gatherInteractively = async (gameDir) => {
     console.log(`Selected device answer: ${deviceAnswer}`);
     if (!deviceAnswer) {
       console.log("No device selected or wrong choice. Aborting installation.");
-      return;
+      throw new AbortedError("Installation aborted by user.");
     }
 
     // Initialize the selected device using the AdbDevice class
@@ -115,7 +117,9 @@ const gatherInteractively = async (gameDir) => {
       console.log(
         `Selected device is not in a ready state. Current state: ${selectedDevice.state()}. Aborting installation.`,
       );
-      return;
+      throw new AbortedError(
+        "Selected device is not in a ready state. Aborting installation.",
+      );
     }
 
     // Begin the gathering
@@ -125,9 +129,9 @@ const gatherInteractively = async (gameDir) => {
       `Is this the correct game folder? (${gameDir})`,
       true,
     );
-    if (!confirmGameFolderAnswer.toLowerCase().match(/^y/i)) {
+    if (!confirmGameFolderAnswer) {
       console.log("Aborting installation.");
-      return;
+      throw new AbortedError("Installation aborted by user.");
     }
 
     // Confirm the title with the user
@@ -167,19 +171,21 @@ const gatherInteractively = async (gameDir) => {
           JoiPlay game directory -> ${jpGameDir}
         `);
 
-    const proceedWithLastAttempt = await confirm(
+    const proceedWithFinalAttempt = await confirm(
       rl,
-      "Proceed with your last attempt? ",
+      "Proceed with this attempt? ",
       false,
     );
-    if (!proceedWithLastAttempt.toLowerCase().match(/^y/i)) {
+    if (!proceedWithFinalAttempt) {
       console.log("Aborting installation.");
-      return;
+      throw new AbortedError("Installation aborted by user.");
     }
 
     if (jpGameId.trim() === "") {
       console.log("Invalid game ID, it can't be empty. Aborting installation.");
-      return;
+      throw new AbortedError(
+        "Invalid game ID, it can't be empty. Aborting installation.",
+      );
     }
 
     const {
@@ -202,12 +208,14 @@ const gatherInteractively = async (gameDir) => {
 
     if (!deviceReachable) {
       console.log("Device not reachable. Aborting installation.");
-      return;
+      throw new AbortedError("Device not reachable. Aborting installation.");
     }
 
     if (jpRunning) {
       console.log("JoiPlay is still running. Aborting installation.");
-      return;
+      throw new AbortedError(
+        "JoiPlay is still running. Aborting installation.",
+      );
     }
 
     const proceedConsent = await confirm(
@@ -217,9 +225,9 @@ const gatherInteractively = async (gameDir) => {
     );
 
     // Check if the user consented to proceed
-    if (!proceedConsent.toLowerCase().match(/^y/i)) {
+    if (!proceedConsent) {
       console.log("Installation aborted by user.");
-      throw new Error("Installation aborted by user.");
+      throw new AbortedError("Installation aborted by user.");
     }
 
     return Promise.resolve({
